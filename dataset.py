@@ -93,7 +93,7 @@ def get_dataloaders(train_images, train_masks, val_images, val_masks,
         batch_size=batch_size,
         shuffle=True,
         num_workers=num_workers,
-        pin_memory=True,
+        pin_memory=torch.cuda.is_available(),
         drop_last=True
     )
     
@@ -102,7 +102,7 @@ def get_dataloaders(train_images, train_masks, val_images, val_masks,
         batch_size=batch_size,
         shuffle=False,
         num_workers=num_workers,
-        pin_memory=True
+        pin_memory=torch.cuda.is_available()
     )
     
     return train_loader, val_loader

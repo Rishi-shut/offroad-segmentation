@@ -4,7 +4,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.cuda.amp import autocast, GradScaler
+from torch.amp import autocast, GradScaler
 from transformers import SegformerForSemanticSegmentation
 from tqdm import tqdm
 
@@ -51,13 +51,16 @@ def train_epoch(model, train_loader, optimizer, scheduler, criterion, device, sc
     
     for images, masks, _ in pbar:
         images = images.to(device)
-        masks = masks.to(device)
+        masks = masks.to(device, dtype=torch.long)
+        if masks.dim() == 4:
+            masks = masks.squeeze(1)
         
         optimizer.zero_grad()
         
-        if config.USE_AMP:
-            with autocast():
+        if config.USE_AMP and device.type == 'cuda':
+            with autocast(device_type=device.type):
                 outputs = model(images).logits
+                outputs = F.interpolate(outputs, size=masks.shape[-2:], mode="bilinear", align_corners=False)
                 loss = criterion(outputs, masks)
             
             scaler.scale(loss).backward()
@@ -70,6 +73,7 @@ def train_epoch(model, train_loader, optimizer, scheduler, criterion, device, sc
             scaler.update()
         else:
             outputs = model(images).logits
+            outputs = F.interpolate(outputs, size=masks.shape[-2:], mode="bilinear", align_corners=False)
             loss = criterion(outputs, masks)
             
             loss.backward()
@@ -110,9 +114,12 @@ def validate_epoch(model, val_loader, criterion, device):
     with torch.no_grad():
         for images, masks, _ in pbar:
             images = images.to(device)
-            masks = masks.to(device)
+            masks = masks.to(device, dtype=torch.long)
+            if masks.dim() == 4:
+                masks = masks.squeeze(1)
             
             outputs = model(images).logits
+            outputs = F.interpolate(outputs, size=masks.shape[-2:], mode="bilinear", align_corners=False)
             loss = criterion(outputs, masks)
             
             pred_labels = outputs.argmax(dim=1)
@@ -175,7 +182,7 @@ def main():
         eta_min=1e-6
     )
     
-    scaler = GradScaler() if config.USE_AMP else None
+    scaler = GradScaler() if (config.USE_AMP and device.type == 'cuda') else None
     
     best_iou = 0.0
     patience_counter = 0
