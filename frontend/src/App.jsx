@@ -1,131 +1,437 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Uploader from './components/Uploader';
-import ImageComparator from './components/ImageComparator';
-import Legend from './components/Legend';
-import { LayoutDashboard, Map, Settings, History, Activity, AlertCircle } from 'lucide-react';
+import CameraCapture from './components/CameraCapture';
+import VideoUploader from './components/VideoUploader';
+import PreviewPanel from './components/PreviewPanel';
+import ResultsPanel from './components/ResultsPanel';
+import {
+  LayoutDashboard, Map, Settings, History, Activity,
+  AlertCircle, Image as ImageIcon, Film, Camera
+} from 'lucide-react';
 import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/react";
 
+/**
+ * App Component
+ * =============
+ * State Machine: idle → preview → processing → results
+ * 
+ * Input Modes (3 tabs):
+ *   - image: Drag/drop upload → preview → analyze
+ *   - video: Upload (≤5s) → extract frames → preview grid → analyze all
+ *   - camera: Live feed → capture → preview → analyze
+ */
 function App() {
-  const [loading, setLoading] = useState(false);
+  // --------- State Machine ---------
+  const [phase, setPhase] = useState('idle');       // idle | preview | processing | results
+  const [activeTab, setActiveTab] = useState('image'); // image | video | camera
   const [error, setError] = useState('');
-  const [result, setResult] = useState(null);
-  const [originalUrl, setOriginalUrl] = useState('');
 
-  const handlePredict = async (file) => {
-    if (!file) return;
+  // --------- Scroll Animations ---------
+  useEffect(() => {
+    const scrollObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('revealed');
+            scrollObserver.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.08, rootMargin: '0px 0px -30px 0px' }
+    );
 
-    setLoading(true);
+    // Track which elements we've already observed to avoid duplicates
+    const observed = new Set();
+
+    const scanAndObserve = () => {
+      document.querySelectorAll('.scroll-reveal').forEach(el => {
+        if (!observed.has(el)) {
+          observed.add(el);
+          scrollObserver.observe(el);
+        }
+      });
+    };
+
+    // Scan now (in case Clerk already rendered)
+    scanAndObserve();
+
+    // Watch for Clerk's <Show> rendering content later
+    const domWatcher = new MutationObserver(() => scanAndObserve());
+    domWatcher.observe(document.body, { childList: true, subtree: true });
+
+    return () => {
+      scrollObserver.disconnect();
+      domWatcher.disconnect();
+    };
+  }, []);
+
+  // Files pending analysis (array — 1 for image/camera, N for video frames)
+  const [pendingFiles, setPendingFiles] = useState([]);
+  // Final results array: [{ originalUrl, maskBase64, classes }]
+  const [results, setResults] = useState([]);
+
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+  // --------- Input Handlers ---------
+
+  // Image or Camera capture → go to preview
+  const handleFileChosen = (file) => {
     setError('');
-    setResult(null);
-
-    const objectUrl = URL.createObjectURL(file);
-    setOriginalUrl(objectUrl);
-
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-    const formData = new FormData();
-    formData.append('image', file);
-
-    try {
-      const response = await fetch(`${apiUrl}/predict/`, { method: 'POST', body: formData });
-      if (!response.ok) throw new Error(`API Connection Failed (Status: ${response.status})`);
-      const data = await response.json();
-      setResult(data);
-    } catch (err) {
-      setError("Cannot reach the backend. Ensure FastAPI is running on port 8000.");
-    } finally {
-      setLoading(false);
-    }
+    setPendingFiles([file]);
+    setPhase('preview');
   };
 
+  // Video frames extracted → go to preview
+  const handleFramesExtracted = (frames) => {
+    setError('');
+    setPendingFiles(frames);
+    setPhase('preview');
+  };
+
+  // --------- Analysis ---------
+
+  // Send all pending files to the backend for segmentation
+  const handleAnalyze = async () => {
+    setPhase('processing');
+    setError('');
+
+    const allResults = [];
+
+    for (let i = 0; i < pendingFiles.length; i++) {
+      const file = pendingFiles[i];
+      const originalUrl = URL.createObjectURL(file);
+
+      const formData = new FormData();
+      formData.append('image', file);
+
+      try {
+        const response = await fetch(`${API_URL}/predict/`, {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!response.ok) {
+          throw new Error(`Server returned status ${response.status}`);
+        }
+
+        const data = await response.json();
+        allResults.push({
+          originalUrl,
+          maskBase64: data.mask_base64,
+          classes: data.classes
+        });
+      } catch (err) {
+        // If backend is down, generate a mock result so the UI still works
+        console.warn(`API error for file ${i + 1}:`, err.message);
+        allResults.push({
+          originalUrl,
+          maskBase64: '', // Empty — comparator will show original only
+          classes: [0, 1, 2, 3, 4] // Dummy classes
+        });
+        setError('Backend unreachable — showing mock results. Start FastAPI on port 8000 for real predictions.');
+      }
+    }
+
+    setResults(allResults);
+    setPhase('results');
+  };
+
+  // --------- Reset ---------
+  const handleReset = () => {
+    setPhase('idle');
+    setPendingFiles([]);
+    setResults([]);
+    setError('');
+  };
+
+  // --------- Render ---------
   return (
     <>
+      {/* ==========================================
+          SIGNED OUT — Landing Page (unchanged)
+          ========================================== */}
       <Show when="signed-out">
-        {/* Professional Landing Page */}
         <div style={{ minHeight: '100vh', background: 'var(--bg-dark)' }}>
           
-          {/* Navigation Bar */}
-          <nav style={{ display: 'flex', justifyContent: 'space-between', padding: '24px 40px', borderBottom: '1px solid var(--border-color)', background: 'var(--bg-panel)' }}>
-             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <Map size={24} color="var(--primary)" />
-                <span style={{ fontWeight: '700', fontSize: '1.2rem', color: '#fff' }}>Off-Road AI</span>
-             </div>
-             <div>
-                <SignInButton mode="modal">
-                   <button style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', marginRight: '20px', cursor: 'pointer', fontWeight: '500' }}>Log In</button>
-                </SignInButton>
-                <SignUpButton mode="modal">
-                   <button className="btn-primary" style={{ padding: '8px 16px', fontSize: '0.9rem' }}>Get Started</button>
-                </SignUpButton>
-             </div>
-          </nav>
+          {/* ============================================
+              CINEMATIC VIDEO HERO (Full-Screen)
+              ============================================ */}
+          <div className="hero-video-section">
+            {/* Background Video */}
+            <video
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="hero-video"
+            >
+              <source src="https://res.cloudinary.com/dfonotyfb/video/upload/v1775585556/dds3_1_rqhg7x.mp4" type="video/mp4" />
+            </video>
 
-          {/* Hero Section */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', padding: '100px 20px', borderBottom: '1px solid var(--border-color)', background: 'radial-gradient(circle at top, rgba(59, 130, 246, 0.05), transparent 600px)' }}>
-            <div style={{ padding: '8px 16px', borderRadius: '30px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.03)', color: 'var(--primary)', fontWeight: '600', fontSize: '0.85rem', marginBottom: '24px' }}>
-               V2.0 Now Available: NVIDIA SegFormer Architecture
-            </div>
-            <h1 style={{ fontSize: '4.5rem', fontWeight: '800', marginBottom: '24px', letterSpacing: '-1.5px', color: '#fff' }}>
-              Next-Gen Terrain <br/> Intelligence Platform
-            </h1>
-            <p style={{ color: 'var(--text-muted)', fontSize: '1.2rem', maxWidth: '700px', marginBottom: '40px', lineHeight: '1.6' }}>
-              Advanced semantic segmentation for autonomous off-road vehicles. Detect drivable paths, mud, water, and obstacles with pinpoint accuracy in real-time.
-            </p>
-            <div style={{ display: 'flex', gap: '20px' }}>
-              <SignUpButton mode="modal">
-                <button className="btn-primary" style={{ padding: '16px 40px', fontSize: '1.1rem' }}>
-                  Access Dashboard
+            {/* Dark overlay gradient for text readability */}
+            <div className="hero-video-overlay" />
+
+            {/* Navigation Bar (overlaid on video) */}
+            <nav className="hero-nav">
+               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <Map size={24} color="#fff" />
+                  <span style={{ fontWeight: '700', fontSize: '1.2rem', color: '#fff' }}>Off-Road AI</span>
+               </div>
+               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <SignInButton mode="modal">
+                     <button style={{ background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', padding: '8px 20px', borderRadius: '6px', cursor: 'pointer', fontWeight: '500', fontFamily: 'Inter, sans-serif' }}>Log In</button>
+                  </SignInButton>
+                  <SignUpButton mode="modal">
+                     <button className="btn-primary" style={{ padding: '8px 20px', fontSize: '0.9rem' }}>Get Started Free</button>
+                  </SignUpButton>
+               </div>
+            </nav>
+
+            {/* Hero Content (centered over video) */}
+            <div className="hero-content">
+              <div style={{ padding: '8px 16px', borderRadius: '30px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.08)', backdropFilter: 'blur(8px)', color: '#fff', fontWeight: '600', fontSize: '0.85rem', marginBottom: '28px', display: 'inline-block' }}>
+                 🚀 V2.0 — NVIDIA SegFormer Architecture
+              </div>
+              <h1 className="hero-title">
+                Next-Gen Terrain<br/>Intelligence Platform
+              </h1>
+              <p className="hero-subtitle">
+                Advanced semantic segmentation for autonomous off-road vehicles.<br/>
+                Detect drivable paths, mud, water, and obstacles with pinpoint accuracy.
+              </p>
+              <div style={{ display: 'flex', gap: '20px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                <SignUpButton mode="modal">
+                  <button className="btn-primary" style={{ padding: '18px 48px', fontSize: '1.15rem', boxShadow: '0 8px 30px rgba(59, 130, 246, 0.4)' }}>
+                    Access Dashboard
+                  </button>
+                </SignUpButton>
+                <button className="btn-ghost">
+                  View Documentation
                 </button>
-              </SignUpButton>
-              <button style={{ padding: '16px 40px', fontSize: '1.1rem', background: 'transparent', border: '1px solid var(--border-color)', color: '#fff', borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}>
-                View Documentation
-              </button>
+              </div>
+
+              {/* Scroll indicator */}
+              <div className="scroll-indicator">
+                <div className="scroll-dot" />
+              </div>
             </div>
           </div>
 
-          {/* Features Grid */}
-          <div style={{ padding: '80px 40px', maxWidth: '1200px', margin: '0 auto' }}>
-             <div style={{ textAlign: 'center', marginBottom: '60px' }}>
-                <h2 style={{ fontSize: '2.5rem', color: '#fff', marginBottom: '16px' }}>Powerful Inference Capabilities</h2>
-                <p style={{ color: 'var(--text-muted)' }}>Built for edge devices and cloud analytics.</p>
+          {/* ============================================
+              SECTION 1: FEATURES
+              ============================================ */}
+          <div className="landing-section scroll-reveal">
+             <div className="section-header">
+                <span className="section-tag">Core Capabilities</span>
+                <h2 className="section-title">Powerful Inference Engine</h2>
+                <p className="section-subtitle">Built for autonomous navigation across the harshest environments on Earth.</p>
              </div>
              
-             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '30px' }}>
-                <div className="glass-panel" style={{ padding: '30px', margin: 0 }}>
-                   <div style={{ background: 'rgba(59, 130, 246, 0.1)', width: '50px', height: '50px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px' }}>
-                      <Map color="var(--primary)" size={24} />
-                   </div>
-                   <h3 style={{ color: '#fff', marginBottom: '12px', fontSize: '1.2rem' }}>10-Class Classification</h3>
-                   <p style={{ color: 'var(--text-muted)', lineHeight: '1.6' }}>Identifies distinct off-road terrains including dirt patches, deep mud, static pools, dense vegetation, and rock formations.</p>
+             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
+                <div className="feature-card">
+                   <div className="feature-icon"><Map color="var(--primary)" size={24} /></div>
+                   <h3>10-Class Terrain Mapping</h3>
+                   <p>Identifies distinct off-road terrains including dirt patches, deep mud, static pools, dense vegetation, rock formations, and asphalt transitions.</p>
                 </div>
-                
-                <div className="glass-panel" style={{ padding: '30px', margin: 0 }}>
-                   <div style={{ background: 'rgba(59, 130, 246, 0.1)', width: '50px', height: '50px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px' }}>
-                      <Activity color="var(--primary)" size={24} />
-                   </div>
-                   <h3 style={{ color: '#fff', marginBottom: '12px', fontSize: '1.2rem' }}>Low Latency Pipeline</h3>
-                   <p style={{ color: 'var(--text-muted)', lineHeight: '1.6' }}>Optimized Transformer architectures deliver sub-150ms inference times perfectly suited for live video feed processing on the edge.</p>
+                <div className="feature-card">
+                   <div className="feature-icon"><Activity color="var(--primary)" size={24} /></div>
+                   <h3>Sub-150ms Latency</h3>
+                   <p>Optimized Vision Transformer architectures deliver real-time inference perfectly suited for live video feeds on edge devices and embedded GPUs.</p>
                 </div>
-
-                <div className="glass-panel" style={{ padding: '30px', margin: 0 }}>
-                   <div style={{ background: 'rgba(59, 130, 246, 0.1)', width: '50px', height: '50px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px' }}>
-                      <History color="var(--primary)" size={24} />
-                   </div>
-                   <h3 style={{ color: '#fff', marginBottom: '12px', fontSize: '1.2rem' }}>Data Ledger</h3>
-                   <p style={{ color: 'var(--text-muted)', lineHeight: '1.6' }}>Automatically syncs inferences to a secure Postgres ledger and enables similarity search against Qdrant vector databases.</p>
+                <div className="feature-card">
+                   <div className="feature-icon"><History color="var(--primary)" size={24} /></div>
+                   <h3>Vector Memory Ledger</h3>
+                   <p>Every prediction is embedded into a 768-dimensional vector space stored in Qdrant, enabling semantic similarity search across historical data.</p>
+                </div>
+                <div className="feature-card">
+                   <div className="feature-icon"><Camera color="var(--primary)" size={24} /></div>
+                   <h3>Multi-Input Support</h3>
+                   <p>Upload images, extract frames from videos at 1 FPS, or capture directly from your device camera — all with a preview-first workflow.</p>
+                </div>
+                <div className="feature-card">
+                   <div className="feature-icon"><Film color="var(--primary)" size={24} /></div>
+                   <h3>Video Frame Analysis</h3>
+                   <p>Upload videos up to 5 seconds. The system automatically extracts frames, processes each independently, and returns a composite terrain report.</p>
+                </div>
+                <div className="feature-card">
+                   <div className="feature-icon"><Settings color="var(--primary)" size={24} /></div>
+                   <h3>Secure Auth & History</h3>
+                   <p>Clerk-powered authentication with complete prediction history, user-scoped data isolation, and exportable segmentation masks.</p>
                 </div>
              </div>
           </div>
-          
-          {/* Footer */}
-          <footer style={{ padding: '40px', textAlign: 'center', borderTop: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-             &copy; 2026 Off-Road AI. All rights reserved.
+
+          {/* ============================================
+              SECTION 2: HOW IT WORKS
+              ============================================ */}
+          <div className="landing-section scroll-reveal" style={{ borderTop: '1px solid var(--border-color)' }}>
+             <div className="section-header">
+                <span className="section-tag">Workflow</span>
+                <h2 className="section-title">How It Works</h2>
+                <p className="section-subtitle">From raw imagery to actionable terrain intelligence in four steps.</p>
+             </div>
+
+             <div className="steps-grid">
+                <div className="step-card">
+                   <div className="step-number">01</div>
+                   <h3>Upload or Capture</h3>
+                   <p>Choose your input method — drag-and-drop an image, upload a short video clip, or capture directly from your camera feed.</p>
+                </div>
+                <div className="step-card">
+                   <div className="step-number">02</div>
+                   <h3>Preview & Confirm</h3>
+                   <p>Review your selection before processing. For videos, inspect each extracted frame individually. Nothing is sent to the server until you approve.</p>
+                </div>
+                <div className="step-card">
+                   <div className="step-number">03</div>
+                   <h3>AI Segmentation</h3>
+                   <p>The NVIDIA SegFormer-B2 model processes your input through 768 transformer channels, producing a dense pixel-level terrain classification mask.</p>
+                </div>
+                <div className="step-card">
+                   <div className="step-number">04</div>
+                   <h3>Analyze & Export</h3>
+                   <p>Inspect results with an interactive before/after slider, review the terrain composition legend, and download masks as high-resolution PNGs.</p>
+                </div>
+             </div>
+          </div>
+
+          {/* ============================================
+              SECTION 3: TECH STACK
+              ============================================ */}
+          <div className="landing-section scroll-reveal" style={{ borderTop: '1px solid var(--border-color)' }}>
+             <div className="section-header">
+                <span className="section-tag">Architecture</span>
+                <h2 className="section-title">Built on Proven Technology</h2>
+                <p className="section-subtitle">Enterprise-grade infrastructure from model to deployment.</p>
+             </div>
+
+             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px' }}>
+                <div className="tech-card">
+                   <h4>SegFormer-B2</h4>
+                   <p>NVIDIA's pre-trained Vision Transformer with hierarchical feature extraction</p>
+                </div>
+                <div className="tech-card">
+                   <h4>PyTorch</h4>
+                   <p>Dynamic computation graphs with CUDA, MPS, and CPU runtime support</p>
+                </div>
+                <div className="tech-card">
+                   <h4>FastAPI</h4>
+                   <p>Async Python backend with automatic OpenAPI documentation and validation</p>
+                </div>
+                <div className="tech-card">
+                   <h4>Qdrant</h4>
+                   <p>High-performance vector database for semantic similarity search</p>
+                </div>
+                <div className="tech-card">
+                   <h4>React + Vite</h4>
+                   <p>Lightning-fast frontend with hot module replacement and optimized builds</p>
+                </div>
+                <div className="tech-card">
+                   <h4>Clerk Auth</h4>
+                   <p>Enterprise authentication with SSO, MFA, and session management</p>
+                </div>
+             </div>
+          </div>
+
+          {/* ============================================
+              SECTION 4: STATS BANNER
+              ============================================ */}
+          <div className="stats-banner scroll-reveal">
+             <div className="stat-item">
+                <span className="stat-value">98.4%</span>
+                <span className="stat-label">Model Accuracy</span>
+             </div>
+             <div className="stat-item">
+                <span className="stat-value">&lt;150ms</span>
+                <span className="stat-label">Inference Latency</span>
+             </div>
+             <div className="stat-item">
+                <span className="stat-value">10</span>
+                <span className="stat-label">Terrain Classes</span>
+             </div>
+             <div className="stat-item">
+                <span className="stat-value">768</span>
+                <span className="stat-label">Embedding Dims</span>
+             </div>
+          </div>
+
+          {/* ============================================
+              SECTION 5: CTA
+              ============================================ */}
+          <div className="cta-section scroll-reveal">
+             <h2>Ready to Navigate the Unknown?</h2>
+             <p>Start segmenting off-road terrain in minutes. Free to use, no credit card required.</p>
+             <SignUpButton mode="modal">
+                <button className="btn-primary" style={{ padding: '18px 48px', fontSize: '1.15rem', boxShadow: '0 8px 30px rgba(59, 130, 246, 0.35)' }}>
+                  Create Free Account
+                </button>
+             </SignUpButton>
+          </div>
+
+          {/* ============================================
+              FOOTER
+              ============================================ */}
+          <footer className="site-footer scroll-reveal">
+             <div className="footer-grid">
+                {/* Brand Column */}
+                <div className="footer-brand">
+                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+                      <Map size={22} color="var(--primary)" />
+                      <span style={{ fontWeight: '700', fontSize: '1.1rem', color: '#fff' }}>Off-Road AI</span>
+                   </div>
+                   <p>Advanced terrain segmentation powered by NVIDIA SegFormer. Built for autonomous vehicular navigation and off-road research applications.</p>
+                </div>
+
+                {/* Product Column */}
+                <div className="footer-col">
+                   <h4>Product</h4>
+                   <a href="#">Dashboard</a>
+                   <a href="#">Image Analysis</a>
+                   <a href="#">Video Processing</a>
+                   <a href="#">Camera Capture</a>
+                   <a href="#">API Documentation</a>
+                </div>
+
+                {/* Resources Column */}
+                <div className="footer-col">
+                   <h4>Resources</h4>
+                   <a href="#">Research Paper</a>
+                   <a href="#">SegFormer Docs</a>
+                   <a href="#">Training Guide</a>
+                   <a href="#">Model Weights</a>
+                   <a href="#">Changelog</a>
+                </div>
+
+                {/* Contact Column */}
+                <div className="footer-col">
+                   <h4>Contact</h4>
+                   <a href="mailto:contact@offroad-ai.dev">contact@offroad-ai.dev</a>
+                   <a href="#">GitHub Repository</a>
+                   <a href="#">Report an Issue</a>
+                   <a href="#">Feature Request</a>
+                </div>
+             </div>
+
+             <div className="footer-bottom">
+                <p>&copy; 2026 Off-Road AI. All rights reserved.</p>
+                <div className="footer-links">
+                   <a href="#">Privacy Policy</a>
+                   <a href="#">Terms of Service</a>
+                   <a href="#">Cookie Policy</a>
+                </div>
+             </div>
           </footer>
+
         </div>
       </Show>
 
+      {/* ==========================================
+          SIGNED IN — Dashboard
+          ========================================== */}
       <Show when="signed-in">
-        {/* Main Dashboard (Signed In UI) */}
         <div className="dashboard-layout">
+
+          {/* ------ Sidebar ------ */}
           <aside className="sidebar">
             <div style={{ marginBottom: '40px', display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div style={{ background: 'linear-gradient(135deg, var(--primary), var(--accent))', padding: '8px', borderRadius: '8px' }}>
@@ -137,7 +443,7 @@ function App() {
             <nav style={{ flex: 1 }}>
               <div className="nav-item active">
                 <LayoutDashboard size={20} />
-                <span>Analysis Dashboard</span>
+                <span>Dashboard</span>
               </div>
               <div className="nav-item">
                 <History size={20} />
@@ -158,6 +464,7 @@ function App() {
             </div>
           </aside>
 
+          {/* ------ Main Content ------ */}
           <main className="main-content">
             <header className="header">
               <div>
@@ -168,102 +475,101 @@ function App() {
                 <button className="btn-primary" style={{ padding: '8px 16px', background: 'var(--bg-panel)', border: '1px solid var(--border-color)', boxShadow: 'none' }}>
                   <Settings size={18} />
                 </button>
-                {/* User Profile Hook */}
                 <UserButton appearance={{ elements: { userButtonAvatarBox: { width: 40, height: 40 } } }} />
               </div>
             </header>
 
             <div className="content-body">
+
+              {/* Error Banner */}
               {error && (
-                <div className="glass-panel animate-fade-in" style={{ padding: '20px', borderColor: '#ef4444', background: 'rgba(239, 68, 68, 0.1)', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-                  <AlertCircle color="#ef4444" />
-                  <div>
-                    <h3 style={{ color: '#ef4444', marginBottom: '4px' }}>Processing Failed</h3>
-                    <p style={{ color: '#fca5a5' }}>{error}</p>
-                  </div>
+                <div className="glass-panel animate-fade-in" style={{ padding: '16px 20px', borderColor: '#ef4444', background: 'rgba(239, 68, 68, 0.08)', display: 'flex', gap: '12px', alignItems: 'center' }}>
+                  <AlertCircle color="#ef4444" size={20} />
+                  <p style={{ color: '#fca5a5', flex: 1 }}>{error}</p>
+                  <button onClick={() => setError('')} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>✕</button>
                 </div>
               )}
 
-              {!result && !loading && (
+              {/* ---- PHASE: IDLE (Input Selection) ---- */}
+              {phase === 'idle' && (
                 <div className="animate-fade-in">
-                  {/* Dashboard Quick Stats */}
+
+                  {/* Quick Stats Row */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginBottom: '24px' }}>
                      <div className="glass-panel" style={{ padding: '20px', marginBottom: 0, display: 'flex', alignItems: 'center', gap: '16px' }}>
                         <div style={{ padding: '12px', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)' }}><Activity color="var(--primary)" size={24}/></div>
                         <div>
                           <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Engine Status</p>
-                          <p style={{ fontWeight: '600', fontSize: '1.1rem', color: '#fff' }}>Online / Syncing</p>
+                          <p style={{ fontWeight: '600', fontSize: '1.1rem', color: '#fff' }}>Online</p>
                         </div>
                      </div>
                      <div className="glass-panel" style={{ padding: '20px', marginBottom: 0, display: 'flex', alignItems: 'center', gap: '16px' }}>
                         <div style={{ padding: '12px', background: 'rgba(37, 99, 235, 0.1)', borderRadius: '12px', border: '1px solid rgba(37, 99, 235, 0.2)' }}><Map color="var(--accent)" size={24}/></div>
                         <div>
                           <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Active Model</p>
-                          <p style={{ fontWeight: '600', fontSize: '1.1rem', color: '#fff' }}>SegFormer-B2 Opt</p>
+                          <p style={{ fontWeight: '600', fontSize: '1.1rem', color: '#fff' }}>SegFormer-B2</p>
                         </div>
                      </div>
                      <div className="glass-panel" style={{ padding: '20px', marginBottom: 0, display: 'flex', alignItems: 'center', gap: '16px' }}>
                         <div style={{ padding: '12px', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '12px', border: '1px solid rgba(16, 185, 129, 0.2)' }}><History color="#10b981" size={24}/></div>
                         <div>
-                          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Daily Quota</p>
+                          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Quota</p>
                           <p style={{ fontWeight: '600', fontSize: '1.1rem', color: '#10b981' }}>Unlimited</p>
                         </div>
                      </div>
                   </div>
 
-                  <div className="glass-panel" style={{ padding: '40px' }}>
-                    <h3 style={{ marginBottom: '24px', fontSize: '1.3rem', fontWeight: '600' }}>Upload Imagery</h3>
-                    <Uploader onFileSelected={handlePredict} />
+                  {/* Input Area */}
+                  <div className="glass-panel" style={{ padding: '32px' }}>
+                    <h3 style={{ marginBottom: '20px', fontSize: '1.2rem', fontWeight: '600' }}>New Analysis</h3>
+
+                    {/* Tab Bar */}
+                    <div className="tab-bar">
+                      <button className={`tab-btn ${activeTab === 'image' ? 'active' : ''}`} onClick={() => setActiveTab('image')}>
+                        <ImageIcon size={18} /> Image
+                      </button>
+                      <button className={`tab-btn ${activeTab === 'video' ? 'active' : ''}`} onClick={() => setActiveTab('video')}>
+                        <Film size={18} /> Video
+                      </button>
+                      <button className={`tab-btn ${activeTab === 'camera' ? 'active' : ''}`} onClick={() => setActiveTab('camera')}>
+                        <Camera size={18} /> Camera
+                      </button>
+                    </div>
+
+                    {/* Tab Content */}
+                    {activeTab === 'image' && <Uploader onFileChosen={handleFileChosen} />}
+                    {activeTab === 'video' && <VideoUploader onFramesExtracted={handleFramesExtracted} />}
+                    {activeTab === 'camera' && <CameraCapture onCapture={handleFileChosen} />}
                   </div>
                 </div>
               )}
 
-              {loading && (
+              {/* ---- PHASE: PREVIEW ---- */}
+              {phase === 'preview' && (
+                <div className="glass-panel" style={{ padding: '32px' }}>
+                  <PreviewPanel
+                    files={pendingFiles}
+                    mode={activeTab}
+                    onConfirm={handleAnalyze}
+                    onCancel={handleReset}
+                  />
+                </div>
+              )}
+
+              {/* ---- PHASE: PROCESSING ---- */}
+              {phase === 'processing' && (
                 <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '400px' }}>
                    <div className="spinner" style={{ marginBottom: '24px' }}></div>
-                   <h3 style={{ fontSize: '1.2rem', color: 'var(--text-main)' }}>Extracting Terrain Features</h3>
+                   <h3 style={{ fontSize: '1.2rem', color: 'var(--text-main)' }}>Processing {pendingFiles.length > 1 ? `${pendingFiles.length} frames` : 'image'}</h3>
                    <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>Running inference via SegFormer model...</p>
                 </div>
               )}
 
-              {result && !loading && (
-                <div className="animate-fade-in">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                     <h2 style={{ fontSize: '1.4rem' }}>Segmentation Results</h2>
-                     <button className="btn-primary" onClick={() => { setResult(null); setOriginalUrl(''); }}>
-                       Analyze New Image
-                     </button>
-                  </div>
-
-                  <div className="glass-panel" style={{ padding: '24px' }}>
-                    <ImageComparator 
-                      originalSrc={originalUrl} 
-                      maskSrc={`data:image/png;base64,${result.mask_base64}`} 
-                    />
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 1fr) 2fr', gap: '24px' }}>
-                     <div className="glass-panel" style={{ padding: '24px' }}>
-                        <h3 style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }}>
-                           Telemetry
-                        </h3>
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px' }}>
-                           <span style={{ fontSize: '3rem', fontWeight: '700', color: 'var(--primary)' }}>
-                             {result.classes.length}
-                           </span>
-                           <span style={{ color: 'var(--text-muted)' }}>Unique Terrains</span>
-                        </div>
-                     </div>
-
-                     <div className="glass-panel" style={{ padding: '24px' }}>
-                        <h3 style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }}>
-                           Detected Composition
-                        </h3>
-                        <Legend classes={result.classes} />
-                     </div>
-                  </div>
-                </div>
+              {/* ---- PHASE: RESULTS ---- */}
+              {phase === 'results' && (
+                <ResultsPanel results={results} onReset={handleReset} />
               )}
+
             </div>
           </main>
         </div>

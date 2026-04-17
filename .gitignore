@@ -73,3 +73,6 @@ best_model.pth
 frontend/node_modules/
 frontend/dist/
 frontend/.env.local
+
+# SQLite (auto-generated fallback DB)
+*.db

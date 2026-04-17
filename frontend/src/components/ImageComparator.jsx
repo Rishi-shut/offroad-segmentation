@@ -1,5 +1,14 @@
 import React, { useRef, useState } from 'react';
 
+/**
+ * ImageComparator Component
+ * -------------------------
+ * Interactive before/after slider for comparing original image with segmentation mask.
+ * 
+ * IMPORTANT: Uses 100% inline styles to ensure each instance is fully independent.
+ * Previously used shared CSS class names which caused all sliders to sync together
+ * when multiple instances existed (e.g. video frame results).
+ */
 const ImageComparator = ({ originalSrc, maskSrc }) => {
   const [sliderPos, setSliderPos] = useState(50);
   const containerRef = useRef(null);
@@ -14,64 +23,93 @@ const ImageComparator = ({ originalSrc, maskSrc }) => {
     setSliderPos(position);
   };
 
-  const css = `
-    .comp-container {
-      position: relative;
-      width: 100%;
-      height: 400px;
-      border-radius: var(--radius-md);
-      overflow: hidden;
-      cursor: col-resize;
-      background: #000;
-      margin: 20px 0;
-    }
-    .comp-img {
-      position: absolute;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      object-fit: contain;
-      user-select: none;
-    }
-    .comp-overlay {
-      position: absolute;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      object-fit: contain;
-      clip-path: polygon(0 0, ${sliderPos}% 0, ${sliderPos}% 100%, 0 100%);
-      opacity: 0.8;
-    }
-    .slider {
-      position: absolute;
-      top: 0; bottom: 0;
-      left: ${sliderPos}%;
-      width: 3px;
-      background: var(--primary);
-      transform: translateX(-50%);
-      pointer-events: none;
-      box-shadow: 0 0 10px var(--primary);
-    }
-    .slider-knob {
-      position: absolute;
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      width: 30px; height: 30px;
-      background: var(--primary);
-      border-radius: 50%;
-      border: 3px solid #fff;
-    }
-  `;
+  // All styles are inline — no shared CSS class names between instances
+  const containerStyle = {
+    position: 'relative',
+    width: '100%',
+    height: '400px',
+    borderRadius: 'var(--radius-md)',
+    overflow: 'hidden',
+    cursor: 'col-resize',
+    background: '#000',
+    margin: '0',
+    userSelect: 'none',
+  };
+
+  const baseImgStyle = {
+    position: 'absolute',
+    top: 0, left: 0,
+    width: '100%', height: '100%',
+    objectFit: 'contain',
+    userSelect: 'none',
+    pointerEvents: 'none',
+  };
+
+  const overlayImgStyle = {
+    ...baseImgStyle,
+    clipPath: `polygon(0 0, ${sliderPos}% 0, ${sliderPos}% 100%, 0 100%)`,
+    opacity: 0.85,
+  };
+
+  const sliderLineStyle = {
+    position: 'absolute',
+    top: 0, bottom: 0,
+    left: `${sliderPos}%`,
+    width: '3px',
+    background: 'var(--primary)',
+    transform: 'translateX(-50%)',
+    pointerEvents: 'none',
+    boxShadow: '0 0 10px var(--primary)',
+    zIndex: 2,
+  };
+
+  const sliderKnobStyle = {
+    position: 'absolute',
+    top: '50%', left: '50%',
+    transform: 'translate(-50%, -50%)',
+    width: '30px', height: '30px',
+    background: 'var(--primary)',
+    borderRadius: '50%',
+    border: '3px solid #fff',
+  };
+
+  // Labels for before/after
+  const labelStyle = (side) => ({
+    position: 'absolute',
+    bottom: '10px',
+    [side]: '12px',
+    background: 'rgba(0,0,0,0.6)',
+    backdropFilter: 'blur(4px)',
+    color: '#fff',
+    fontSize: '0.75rem',
+    fontWeight: '600',
+    padding: '4px 10px',
+    borderRadius: '20px',
+    zIndex: 3,
+    pointerEvents: 'none',
+  });
 
   return (
-    <div 
-      className="comp-container animate-fade-in"
+    <div
       ref={containerRef}
+      style={containerStyle}
       onMouseMove={handleMove}
       onTouchMove={handleMove}
     >
-      <style>{css}</style>
-      <img src={originalSrc} alt="Original" className="comp-img" />
-      {maskSrc && <img src={maskSrc} alt="Mask" className="comp-overlay" />}
-      <div className="slider"><div className="slider-knob"></div></div>
+      {/* Mask (bottom layer) */}
+      {maskSrc && <img src={maskSrc} alt="Mask" style={baseImgStyle} />}
+
+      {/* Original (top layer, clipped) */}
+      <img src={originalSrc} alt="Original" style={overlayImgStyle} />
+
+      {/* Slider line + knob */}
+      <div style={sliderLineStyle}>
+        <div style={sliderKnobStyle} />
+      </div>
+
+      {/* Labels */}
+      <span style={labelStyle('left')}>Original</span>
+      <span style={labelStyle('right')}>Segmented</span>
     </div>
   );
 };

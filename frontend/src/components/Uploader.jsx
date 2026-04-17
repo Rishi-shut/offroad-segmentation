@@ -1,93 +1,70 @@
-import React, { useCallback, useState } from 'react';
-import { UploadCloud, CheckCircle } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { Upload, Image as ImageIcon } from 'lucide-react';
 
-const Uploader = ({ onFileSelected }) => {
-  const [isDragOver, setIsDragOver] = useState(false);
-  const [selectedFile, setSelectedFile] = useState(null);
+/**
+ * Uploader Component (Updated)
+ * ----------------------------
+ * Drag-and-drop image upload zone.
+ * Instead of auto-processing, it now calls onFileChosen
+ * which triggers the preview step in the parent.
+ */
+function Uploader({ onFileChosen }) {
+  const fileInputRef = useRef(null);
+  const [dragging, setDragging] = useState(false);
 
-  const handleDragOver = useCallback((e) => {
-    e.preventDefault();
-    setIsDragOver(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e) => {
-    e.preventDefault();
-    setIsDragOver(false);
-  }, []);
-
-  const handleDrop = useCallback((e) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const file = e.dataTransfer.files[0];
-      setSelectedFile(file);
-      onFileSelected(file);
+  const handleFile = (file) => {
+    if (!file) return;
+    // Validate it's an image
+    if (!file.type.startsWith('image/')) {
+      return;
     }
-  }, [onFileSelected]);
-
-  const handleFileChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setSelectedFile(file);
-      onFileSelected(file);
-    }
+    if (onFileChosen) onFileChosen(file);
   };
 
-  const css = `
-    .upload-area {
-      border: 2px dashed ${isDragOver ? 'var(--primary)' : 'var(--border-color)'};
-      border-radius: var(--radius-md);
-      padding: 60px 20px;
-      text-align: center;
-      cursor: pointer;
-      transition: all 0.3s;
-      background: ${isDragOver ? 'rgba(0, 212, 255, 0.05)' : 'transparent'};
-    }
-    .upload-area:hover {
-      border-color: var(--primary);
-      background: rgba(0, 212, 255, 0.05);
-    }
-    .uploader-icon {
-      margin-bottom: 15px;
-      color: ${isDragOver ? 'var(--primary)' : 'var(--text-main)'};
-    }
-  `;
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragging(false);
+    const file = e.dataTransfer.files[0];
+    handleFile(file);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setDragging(true);
+  };
 
   return (
-    <>
-      <style>{css}</style>
-      <div 
-        className="upload-area"
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        onClick={() => document.getElementById('file-upload').click()}
-      >
-        <input 
-          id="file-upload" 
-          type="file" 
-          accept="image/*" 
-          style={{ display: 'none' }} 
-          onChange={handleFileChange}
-        />
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          {selectedFile ? (
-            <>
-              <CheckCircle size={48} className="uploader-icon" color="var(--primary)" />
-              <p style={{ fontWeight: 'bold' }}>{selectedFile.name}</p>
-              <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginTop: '8px' }}>Click to change</p>
-            </>
-          ) : (
-            <>
-              <UploadCloud size={48} className="uploader-icon" />
-              <p>Click to select an image</p>
-              <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginTop: '8px' }}>or drag and drop here</p>
-            </>
-          )}
-        </div>
+    <div
+      className={`upload-zone ${dragging ? 'dragging' : ''}`}
+      onDrop={handleDrop}
+      onDragOver={handleDragOver}
+      onDragLeave={() => setDragging(false)}
+      onClick={() => fileInputRef.current?.click()}
+    >
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={(e) => handleFile(e.target.files[0])}
+      />
+
+      <div className="upload-icon-wrapper">
+        {dragging ? (
+          <ImageIcon size={48} color="var(--primary)" />
+        ) : (
+          <Upload size={48} color="var(--text-muted)" />
+        )}
       </div>
-    </>
+
+      <h3 style={{ marginTop: '16px', color: '#fff', fontSize: '1.1rem' }}>
+        {dragging ? 'Drop your image here' : 'Upload Image'}
+      </h3>
+      <p style={{ color: 'var(--text-muted)', marginTop: '8px', fontSize: '0.9rem' }}>
+        Drag & drop or click to browse • JPG, PNG, WebP
+      </p>
+    </div>
   );
-};
+}
 
 export default Uploader;

@@ -1,10 +1,14 @@
 import os
+import json
+import sqlite3
 import numpy as np
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 
 class QdrantManager:
+    """Manages vector storage and similarity search via Qdrant."""
+    
     def __init__(self, url: str = None, api_key: str = None):
         self.client = None
         self.collection_name = "segmentation_memory"
@@ -119,6 +123,8 @@ class QdrantManager:
 
 
 class PostgreSQLManager:
+    """Manages prediction history via PostgreSQL (Neon)."""
+    
     def __init__(self, database_url: str):
         self.pool = None
         self.url = database_url
@@ -233,3 +239,113 @@ class PostgreSQLManager:
     async def close(self):
         if self.pool:
             await self.pool.close()
+
+
+class SQLiteManager:
+    """
+    Lightweight SQLite fallback for local development.
+    Used automatically when DATABASE_URL is not set or PostgreSQL fails.
+    Stores image metadata, upload timestamps, and prediction history.
+    """
+    
+    def __init__(self, db_path: str = "segmentation.db"):
+        self.db_path = db_path
+        self.conn = sqlite3.connect(db_path, check_same_thread=False)
+        self.conn.row_factory = sqlite3.Row
+        print(f"Connected to SQLite at {db_path}")
+    
+    def create_tables(self):
+        cursor = self.conn.cursor()
+        
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS predictions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                image_name TEXT NOT NULL,
+                predicted_classes TEXT,
+                iou_score REAL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Image metadata table — stores upload info and file references
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS image_metadata (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT,
+                file_name TEXT NOT NULL,
+                file_size INTEGER,
+                input_type TEXT DEFAULT 'image',
+                upload_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        self.conn.commit()
+    
+    def save_prediction(
+        self,
+        user_id: str,
+        image_name: str,
+        predicted_classes: List[int],
+        iou_score: float = None
+    ):
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """INSERT INTO predictions (user_id, image_name, predicted_classes, iou_score)
+               VALUES (?, ?, ?, ?)""",
+            (user_id, image_name, json.dumps(predicted_classes), iou_score)
+        )
+        self.conn.commit()
+    
+    def save_image_metadata(
+        self,
+        file_name: str,
+        file_size: int = 0,
+        input_type: str = "image",
+        user_id: str = None
+    ):
+        """Store metadata about an uploaded file (image, video frame, camera capture)."""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """INSERT INTO image_metadata (user_id, file_name, file_size, input_type)
+               VALUES (?, ?, ?, ?)""",
+            (user_id, file_name, file_size, input_type)
+        )
+        self.conn.commit()
+    
+    def get_user_predictions(
+        self,
+        user_id: str,
+        limit: int = 20
+    ) -> List[Dict[str, Any]]:
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """SELECT id, user_id, image_name, predicted_classes, iou_score, created_at
+               FROM predictions
+               WHERE user_id = ?
+               ORDER BY created_at DESC
+               LIMIT ?""",
+            (user_id, limit)
+        )
+        
+        rows = cursor.fetchall()
+        return [
+            {
+                'id': row['id'],
+                'user_id': row['user_id'],
+                'image_name': row['image_name'],
+                'predicted_classes': json.loads(row['predicted_classes']) if row['predicted_classes'] else [],
+                'iou_score': row['iou_score'],
+                'created_at': row['created_at']
+            }
+            for row in rows
+        ]
+    
+    def get_total_predictions(self) -> int:
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM predictions")
+        return cursor.fetchone()[0]
+    
+    def close(self):
+        if self.conn:
+            self.conn.close()

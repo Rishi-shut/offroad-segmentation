@@ -10,10 +10,17 @@ from PIL import Image
 import io
 import base64
 
-from model_inference import SegmentationModel
-from database import QdrantManager, PostgreSQLManager
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'))
+except ImportError:
+    pass  # python-dotenv not installed; rely on system env vars
 
-app = FastAPI(title="Off-Road Segmentation API", version="1.0.0")
+from model_inference import SegmentationModel
+from database import QdrantManager, PostgreSQLManager, SQLiteManager
+
+app = FastAPI(title="Off-Road Segmentation API", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -25,15 +32,16 @@ app.add_middleware(
 
 segmentation_model = None
 qdrant_manager = None
-postgres_manager = None
+db_manager = None  # Can be PostgreSQL or SQLite
 
 
 @app.on_event("startup")
 async def startup_event():
-    global segmentation_model, qdrant_manager, postgres_manager
+    global segmentation_model, qdrant_manager, db_manager
     
     model_path = os.environ.get("MODEL_PATH", "best_model.pth")
     
+    # -- Load Model --
     try:
         segmentation_model = SegmentationModel(model_path)
         print(f"Model loaded from {model_path}")
@@ -41,6 +49,7 @@ async def startup_event():
         print(f"Warning: Could not load model: {e}")
         segmentation_model = None
     
+    # -- Qdrant Vector DB --
     qdrant_url = os.environ.get("QDRANT_URL")
     qdrant_api_key = os.environ.get("QDRANT_API_KEY")
     
@@ -49,17 +58,35 @@ async def startup_event():
     else:
         qdrant_manager = QdrantManager()
     
+    # -- SQL Database (PostgreSQL with SQLite fallback) --
     db_url = os.environ.get("DATABASE_URL")
     if db_url:
-        postgres_manager = PostgreSQLManager(db_url)
-        await postgres_manager.create_tables()
+        try:
+            db_manager = PostgreSQLManager(db_url)
+            await db_manager.create_tables()
+            print("Connected to PostgreSQL")
+        except Exception as e:
+            print(f"PostgreSQL failed ({e}), falling back to SQLite")
+            db_manager = SQLiteManager()
+            db_manager.create_tables()
+    else:
+        print("No DATABASE_URL set, using SQLite")
+        db_manager = SQLiteManager()
+        db_manager.create_tables()
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    if postgres_manager:
-        await postgres_manager.close()
+    if db_manager and hasattr(db_manager, 'close'):
+        try:
+            await db_manager.close()
+        except TypeError:
+            db_manager.close()  # SQLite close is synchronous
 
+
+# ==========================================
+# Response Models
+# ==========================================
 
 class PredictionResponse(BaseModel):
     image_id: str
@@ -84,9 +111,26 @@ class UserPrediction(BaseModel):
     created_at: Optional[str] = None
 
 
+class FrameInput(BaseModel):
+    """Accepts a base64-encoded frame for segmentation."""
+    frame_base64: str
+    frame_name: Optional[str] = "frame.png"
+
+
+class EmbeddingInput(BaseModel):
+    """Accepts a vector + metadata to store in Qdrant."""
+    image_id: str
+    vector: List[float]
+    metadata: Optional[dict] = {}
+
+
+# ==========================================
+# Endpoints
+# ==========================================
+
 @app.get("/")
 async def root():
-    return {"message": "Off-Road Segmentation API", "status": "running"}
+    return {"message": "Off-Road Segmentation API", "version": "2.0.0", "status": "running"}
 
 
 @app.get("/health")
@@ -95,13 +139,15 @@ async def health_check():
     return {
         "status": "healthy",
         "model_loaded": model_loaded,
-        "qdrant_connected": qdrant_manager is not None,
-        "postgres_connected": postgres_manager is not None
+        "qdrant_connected": qdrant_manager is not None and qdrant_manager.client is not None,
+        "db_connected": db_manager is not None
     }
 
 
+# -- Predict from uploaded image file --
 @app.post("/predict/", response_model=PredictionResponse)
 async def predict(image: UploadFile = File(...), user_id: Optional[str] = None):
+    """Original prediction endpoint. Accepts a multipart image upload."""
     if segmentation_model is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
     
@@ -120,28 +166,37 @@ async def predict(image: UploadFile = File(...), user_id: Optional[str] = None):
         
         unique_classes = sorted(np.unique(mask_array).tolist())
         
-        if qdrant_manager and segmentation_model.embedder:
+        # Store embedding in Qdrant
+        if qdrant_manager and qdrant_manager.client and segmentation_model.embedder:
             try:
                 embedding = segmentation_model.extract_embedding(img)
                 payload = {
                     "image_id": image.filename,
                     "predicted_classes": unique_classes,
                     "user_id": user_id,
-                    "iou_score": None
                 }
                 qdrant_manager.insert_embedding(embedding, payload)
             except Exception as e:
                 print(f"Qdrant insertion error: {e}")
         
-        if postgres_manager and user_id:
+        # Save prediction to SQL database
+        if db_manager and user_id:
             try:
-                await postgres_manager.save_prediction(
-                    user_id=user_id,
-                    image_name=image.filename,
-                    predicted_classes=unique_classes
-                )
+                if hasattr(db_manager, 'save_prediction'):
+                    if isinstance(db_manager, PostgreSQLManager):
+                        await db_manager.save_prediction(
+                            user_id=user_id,
+                            image_name=image.filename,
+                            predicted_classes=unique_classes
+                        )
+                    else:
+                        db_manager.save_prediction(
+                            user_id=user_id,
+                            image_name=image.filename,
+                            predicted_classes=unique_classes
+                        )
             except Exception as e:
-                print(f"PostgreSQL save error: {e}")
+                print(f"DB save error: {e}")
         
         return PredictionResponse(
             image_id=image.filename,
@@ -153,6 +208,66 @@ async def predict(image: UploadFile = File(...), user_id: Optional[str] = None):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# -- Alias endpoint with clearer naming --
+@app.post("/predict-image/", response_model=PredictionResponse)
+async def predict_image(image: UploadFile = File(...), user_id: Optional[str] = None):
+    """Alias for /predict/ with clearer naming."""
+    return await predict(image=image, user_id=user_id)
+
+
+# -- Predict from a base64-encoded video frame --
+@app.post("/predict-frame/", response_model=PredictionResponse)
+async def predict_frame(frame_input: FrameInput):
+    """Accepts a base64-encoded frame and returns segmentation results."""
+    if segmentation_model is None:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+    
+    try:
+        # Decode base64 frame to PIL Image
+        frame_bytes = base64.b64decode(frame_input.frame_base64)
+        img = Image.open(io.BytesIO(frame_bytes)).convert('RGB')
+        
+        mask, classes = segmentation_model.predict(img)
+        
+        mask_array = np.array(mask)
+        mask_pil = Image.fromarray(mask_array.astype(np.uint8))
+        
+        buffer = io.BytesIO()
+        mask_pil.save(buffer, format="PNG")
+        mask_base64 = base64.b64encode(buffer.getvalue()).decode()
+        
+        unique_classes = sorted(np.unique(mask_array).tolist())
+        
+        return PredictionResponse(
+            image_id=frame_input.frame_name,
+            mask_base64=mask_base64,
+            classes=unique_classes
+        )
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# -- Store an embedding in Qdrant --
+@app.post("/store-embedding/")
+async def store_embedding(embedding_input: EmbeddingInput):
+    """Manually store a vector embedding in the Qdrant vector database."""
+    if qdrant_manager is None or qdrant_manager.client is None:
+        raise HTTPException(status_code=503, detail="Qdrant not connected")
+    
+    try:
+        vector = np.array(embedding_input.vector, dtype=np.float32)
+        payload = {
+            "image_id": embedding_input.image_id,
+            **embedding_input.metadata
+        }
+        point_id = qdrant_manager.insert_embedding(vector, payload)
+        return {"status": "stored", "point_id": point_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# -- Batch predict (existing) --
 @app.post("/predict/batch/", response_model=List[PredictionResponse])
 async def predict_batch(images: List[UploadFile] = File(...)):
     if segmentation_model is None:
@@ -187,9 +302,10 @@ async def predict_batch(images: List[UploadFile] = File(...)):
     return results
 
 
+# -- Similar scenes (existing) --
 @app.get("/similar/{image_id}", response_model=List[SimilarResponse])
 async def get_similar_scenes(image_id: str, top_k: int = 5):
-    if qdrant_manager is None:
+    if qdrant_manager is None or qdrant_manager.client is None:
         raise HTTPException(status_code=503, detail="Qdrant not connected")
     
     try:
@@ -232,32 +348,40 @@ async def get_similar_scenes(image_id: str, top_k: int = 5):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# -- User history (existing) --
 @app.get("/history/{user_id}", response_model=List[UserPrediction])
 async def get_user_history(user_id: str, limit: int = 20):
-    if postgres_manager is None:
+    if db_manager is None:
         raise HTTPException(status_code=503, detail="Database not connected")
     
     try:
-        predictions = await postgres_manager.get_user_predictions(user_id, limit=limit)
+        if isinstance(db_manager, PostgreSQLManager):
+            predictions = await db_manager.get_user_predictions(user_id, limit=limit)
+        else:
+            predictions = db_manager.get_user_predictions(user_id, limit=limit)
         return predictions
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# -- Stats (existing) --
 @app.get("/stats/")
 async def get_stats():
     stats = {"total_predictions": 0, "qdrant_points": 0}
     
-    if qdrant_manager:
+    if qdrant_manager and qdrant_manager.client:
         try:
             info = qdrant_manager.get_collection_info()
             stats["qdrant_points"] = info.get('points_count', 0)
         except:
             pass
     
-    if postgres_manager:
+    if db_manager:
         try:
-            count = await postgres_manager.get_total_predictions()
+            if isinstance(db_manager, PostgreSQLManager):
+                count = await db_manager.get_total_predictions()
+            else:
+                count = db_manager.get_total_predictions()
             stats["total_predictions"] = count
         except:
             pass
