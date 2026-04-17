@@ -6,8 +6,8 @@ from pathlib import Path
 
 
 CLASS_NAMES = [
-    'background', 'road', 'vegetation', 'gravel', 'sand', 
-        'rock', 'obstacle', 'trail', 'water', 'other'
+    'background (100)', 'road (200)', 'vegetation (300)', 'gravel (500)', 'sand (550)', 
+    'rock (600)', 'obstacle (700)', 'trail (800)', 'water (7100)', 'other (10000)'
 ]
 
 COLOR_PALETTE = [

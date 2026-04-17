@@ -52,3 +52,24 @@ logs/
 results/
 output/
 plots/
+
+#Dataset
+Offroad_Segmentation_Training_Dataset/
+
+# Documentation (local only - don't commit)
+doc/
+
+# Mobile / Expo
+node_modules/
+.expo/
+.expo-shared/
+web-build/
+
+# Generated
+predictions/
+best_model.pth
+
+# Frontend Web Application
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local

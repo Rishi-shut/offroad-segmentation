@@ -12,12 +12,12 @@ MODEL_NAME = "nvidia/segformer-b2-finetuned-ade-512-512"
 MODEL_PATH = "best_model.pth"
 
 
-TRAIN_IMAGES_DIR = "data/train/images"
-TRAIN_MASKS_DIR = "data/train/masks"
-VAL_IMAGES_DIR = "data/val/images"
-VAL_MASKS_DIR = "data/val/masks"
-TEST_IMAGES_DIR = "data/test/images"
-TEST_MASKS_DIR = "data/test/masks"
+TRAIN_IMAGES_DIR = "Offroad_Segmentation_Training_Dataset/train/Color_Images"
+TRAIN_MASKS_DIR = "Offroad_Segmentation_Training_Dataset/train/Segmentation"
+VAL_IMAGES_DIR = "Offroad_Segmentation_Training_Dataset/val/Color_Images"
+VAL_MASKS_DIR = "Offroad_Segmentation_Training_Dataset/val/Segmentation"
+TEST_IMAGES_DIR = "Offroad_Segmentation_Training_Dataset/test/Color_Images"
+TEST_MASKS_DIR = "Offroad_Segmentation_Training_Dataset/test/Segmentation"
 
 
 DEVICE = "cuda" if os.environ.get("CUDA_VISIBLE_DEVICES") else "cpu"
