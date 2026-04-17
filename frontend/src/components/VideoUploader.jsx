@@ -141,34 +141,46 @@ function VideoUploader({ onFramesExtracted }) {
 
       {/* Extracting Progress */}
       {extracting && (
-        <div className="video-extracting">
-          <div className="spinner" style={{ width: '32px', height: '32px', marginBottom: '16px' }} />
-          <h4 style={{ color: '#fff', marginBottom: '8px' }}>Extracting Frames</h4>
-          <p style={{ color: 'var(--text-muted)', marginBottom: '16px' }}>Processing at 1 frame per second...</p>
-          <div className="progress-bar">
-            <div className="progress-fill" style={{ width: `${progress}%` }} />
+        <div className="upload-zone-premium" style={{ cursor: 'default' }}>
+          <div className="spinner" style={{ width: '40px', height: '40px', margin: '0 auto 24px', borderColor: 'rgba(255,255,255,0.1)', borderTopColor: 'var(--primary)', borderWidth: '3px' }} />
+          <h4 style={{ color: '#fff', fontSize: '1.2rem', marginBottom: '12px' }}>Extracting Frames</h4>
+          <p style={{ color: 'var(--text-muted)', marginBottom: '24px', fontSize: '0.95rem' }}>Processing your video at 1 frame per second...</p>
+          <div className="progress-glow-container" style={{ width: '80%', margin: '0 auto' }}>
+            <div className="progress-glow-fill" style={{ width: `${progress}%`, background: 'var(--primary)', boxShadow: '0 0 15px rgba(255, 255, 255, 0.5)' }} />
           </div>
-          <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '8px' }}>{progress}%</span>
+          <span style={{ display: 'block', color: 'var(--primary)', fontWeight: '600', fontSize: '1rem', marginTop: '16px' }}>{progress}%</span>
         </div>
       )}
 
       {/* Drop Zone */}
       {!extracting && (
         <div
-          className={`video-dropzone ${dragging ? 'dragging' : ''}`}
+          className={`upload-zone-premium ${dragging ? 'dragging' : ''}`}
           onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
           onDragLeave={() => setDragging(false)}
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
         >
-          <Film size={48} color={dragging ? 'var(--primary)' : 'var(--text-muted)'} />
-          <h3 style={{ marginTop: '16px', color: '#fff' }}>Upload Video</h3>
-          <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>
-            Drag & drop or click to select • Max {MAX_DURATION} seconds
+          <div className="upload-icon-wrapper">
+             {dragging ? (
+                <div style={{ background: 'rgba(255, 255, 255, 0.1)', padding: '20px', borderRadius: '50%', display: 'inline-block' }}>
+                   <Film size={48} color="#fff" />
+                </div>
+             ) : (
+                <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '20px', borderRadius: '50%', display: 'inline-block', border: '1px solid rgba(255,255,255,0.05)' }}>
+                   <Film size={48} color="var(--text-muted)" />
+                </div>
+             )}
+          </div>
+          <h3 style={{ marginTop: '24px', color: '#fff', fontSize: '1.25rem', fontWeight: '600' }}>Upload Video</h3>
+          <p style={{ color: 'var(--text-muted)', marginTop: '8px', fontSize: '0.95rem' }}>
+            Drag & drop or click to select • Max {MAX_DURATION}s
           </p>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '4px' }}>
-            MP4, WebM, MOV supported
-          </p>
+          <div style={{ marginTop: '12px', display: 'flex', gap: '8px', justifyContent: 'center' }}>
+            <span style={{ padding: '4px 10px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>MP4</span>
+            <span style={{ padding: '4px 10px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>WebM</span>
+            <span style={{ padding: '4px 10px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>MOV</span>
+          </div>
         </div>
       )}
     </div>

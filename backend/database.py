@@ -128,16 +128,16 @@ class PostgreSQLManager:
     def __init__(self, database_url: str):
         self.pool = None
         self.url = database_url
-        
         if database_url:
+            print(f"PostgreSQL Manager initialized for {database_url[:20]}...")
+
+    async def connect(self):
+        """Asynchronously initialize the connection pool."""
+        if self.url:
             try:
                 import asyncpg
-                import asyncio
-                
-                self.pool = asyncio.get_event_loop().run_until_complete(
-                    asyncpg.create_pool(dsn=database_url, min_size=1, max_size=5)
-                )
-                print(f"Connected to PostgreSQL")
+                self.pool = await asyncpg.create_pool(dsn=self.url, min_size=1, max_size=5)
+                print(f"Connected to PostgreSQL successfully")
             except Exception as e:
                 print(f"PostgreSQL connection error: {e}")
                 self.pool = None

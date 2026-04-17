@@ -53,18 +53,23 @@ function PreviewPanel({ files, mode, onConfirm, onCancel }) {
       </div>
 
       {/* Confirm / Cancel Actions */}
-      <div className="preview-actions">
+      <div className="preview-actions" style={{ display: 'flex', gap: '16px', marginTop: '32px' }}>
         <button
-          className="btn-primary"
           onClick={onCancel}
-          style={{ background: 'var(--bg-panel-hover)', border: '1px solid var(--border-color)', boxShadow: 'none' }}
+          style={{ padding: '14px 28px', background: 'rgba(255,255,255,0.05)', color: '#fff', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', transition: 'all 0.2s', fontWeight: '500', flex: 1, justifyContent: 'center' }}
+          onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+          onMouseOut={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
         >
           <ArrowLeft size={18} />
-          Go Back
+          Back
         </button>
-        <button className="btn-primary" onClick={onConfirm}>
+        <button 
+          onClick={onConfirm}
+          className="btn-primary"
+          style={{ flex: 2, padding: '14px 28px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '0 0 20px rgba(59,130,246,0.3)', fontWeight: '600', transition: 'all 0.2s' }}
+        >
           <Zap size={18} />
-          {isMultiFrame ? `Analyze All ${files.length} Frames` : 'Analyze'}
+          {isMultiFrame ? `Analyze All ${files.length} Frames` : 'Start Analysis'}
         </button>
       </div>
     </div>

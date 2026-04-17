@@ -1,7 +1,7 @@
 import React from 'react';
 
 const CLASS_NAMES = ['Background', 'Road', 'Vegetation', 'Gravel', 'Sand', 'Rock', 'Obstacle', 'Trail', 'Water', 'Other'];
-const CLASS_COLORS = ['#000000', '#800000', '#008000', '#808000', '#000080', '#800080', '#008080', '#808080', '#400000', '#C00000'];
+const CLASS_COLORS = ['#000000', '#35A2FF', '#00FF00', '#FFD700', '#F4E0AF', '#F900BF', '#FF0000', '#E0E0E0', '#00FFFF', '#9D00FF'];
 
 const Legend = ({ classes = [] }) => {
   if (classes.length === 0) return null;

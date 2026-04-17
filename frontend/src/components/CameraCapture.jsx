@@ -144,32 +144,56 @@ function CameraCapture({ onCapture }) {
 
       {/* Initial State: Camera not started */}
       {!isStreaming && !capturedUrl && !error && (
-        <div className="camera-start" onClick={startCamera}>
-          <Camera size={48} color="var(--primary)" />
-          <h3 style={{ marginTop: '16px', color: '#fff' }}>Open Camera</h3>
-          <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>
-            Click to access your device camera
+        <div className="upload-zone-premium" onClick={startCamera}>
+          <div className="upload-icon-wrapper">
+             <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '20px', borderRadius: '50%', display: 'inline-block', border: '1px solid rgba(255,255,255,0.05)' }}>
+                <Camera size={48} color="var(--text-muted)" />
+             </div>
+          </div>
+          <h3 style={{ marginTop: '24px', color: '#fff', fontSize: '1.25rem', fontWeight: '600' }}>Access Camera</h3>
+          <p style={{ color: 'var(--text-muted)', marginTop: '8px', fontSize: '0.95rem' }}>
+            Click to start live video feed
           </p>
         </div>
       )}
 
       {/* Live Feed State */}
       {isStreaming && !capturedUrl && (
-        <div className="camera-feed-wrapper">
+        <div className="camera-viewfinder">
+          <div className="viewfinder-corner tl" />
+          <div className="viewfinder-corner tr" />
+          <div className="viewfinder-corner bl" />
+          <div className="viewfinder-corner br" />
+
+          {/* Crosshair target */}
+          <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '40px', height: '40px', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '50%', zIndex: 5 }}>
+            <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '4px', height: '4px', background: 'var(--primary)', borderRadius: '50%' }} />
+          </div>
+
           <video
             ref={videoRef}
             autoPlay
             playsInline
             muted
-            className="camera-feed"
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
           />
-          <div className="camera-controls">
-            <button className="btn-capture" onClick={handleCapture}>
-              <div className="btn-capture-inner" />
-            </button>
-            <button className="btn-cancel-camera" onClick={stopCamera}>
+
+          <div style={{ position: 'absolute', bottom: '30px', left: 0, right: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '30px', zIndex: 20 }}>
+            <button
+               onClick={stopCamera}
+               style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', padding: '10px 20px', borderRadius: '30px', cursor: 'pointer', transition: 'all 0.2s', fontWeight: '500' }}
+               onMouseOver={(e) => e.currentTarget.style.background = 'rgba(0,0,0,0.8)'}
+               onMouseOut={(e) => e.currentTarget.style.background = 'rgba(0,0,0,0.5)'}
+            >
               Cancel
             </button>
+
+            <button className="shutter-btn" onClick={handleCapture}>
+              <div className="shutter-btn-inner" />
+            </button>
+
+            {/* Spacer for symmetry */}
+            <div style={{ width: '85px' }} />
           </div>
         </div>
       )}

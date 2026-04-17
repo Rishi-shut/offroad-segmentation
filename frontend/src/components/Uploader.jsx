@@ -35,7 +35,7 @@ function Uploader({ onFileChosen }) {
 
   return (
     <div
-      className={`upload-zone ${dragging ? 'dragging' : ''}`}
+      className={`upload-zone-premium ${dragging ? 'dragging' : ''}`}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
       onDragLeave={() => setDragging(false)}
@@ -51,17 +51,21 @@ function Uploader({ onFileChosen }) {
 
       <div className="upload-icon-wrapper">
         {dragging ? (
-          <ImageIcon size={48} color="var(--primary)" />
+          <div style={{ background: 'rgba(255, 255, 255, 0.1)', padding: '20px', borderRadius: '50%', display: 'inline-block' }}>
+             <ImageIcon size={48} color="#fff" />
+          </div>
         ) : (
-          <Upload size={48} color="var(--text-muted)" />
+          <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '20px', borderRadius: '50%', display: 'inline-block', border: '1px solid rgba(255,255,255,0.05)' }}>
+             <Upload size={48} color="var(--text-muted)" />
+          </div>
         )}
       </div>
 
-      <h3 style={{ marginTop: '16px', color: '#fff', fontSize: '1.1rem' }}>
-        {dragging ? 'Drop your image here' : 'Upload Image'}
+      <h3 style={{ marginTop: '24px', color: '#fff', fontSize: '1.25rem', fontWeight: '600' }}>
+        {dragging ? 'Release to upload' : 'Upload or Drag Image'}
       </h3>
-      <p style={{ color: 'var(--text-muted)', marginTop: '8px', fontSize: '0.9rem' }}>
-        Drag & drop or click to browse • JPG, PNG, WebP
+      <p style={{ color: 'var(--text-muted)', marginTop: '8px', fontSize: '0.95rem' }}>
+        High-resolution JPG, PNG, or WebP
       </p>
     </div>
   );

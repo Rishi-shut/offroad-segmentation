@@ -11,16 +11,16 @@ CLASS_NAMES = [
 ]
 
 COLOR_PALETTE = [
-    [0, 0, 0],
-    [128, 0, 0],
-    [0, 128, 0],
-    [128, 128, 0],
-    [0, 0, 128],
-    [128, 0, 128],
-    [0, 128, 128],
-    [128, 128, 128],
-    [64, 0, 0],
-    [192, 0, 0]
+    [0, 0, 0],         # background: deep black
+    [53, 162, 255],    # road: electric blue
+    [0, 255, 0],       # vegetation: neon green
+    [255, 215, 0],     # gravel: golden amber
+    [244, 224, 175],   # sand: desert yellow
+    [249, 0, 191],     # rock: hot pink
+    [255, 0, 0],       # obstacle: bright red
+    [224, 224, 224],   # trail: silver/white
+    [0, 255, 255],     # water: deep cyan
+    [157, 0, 255]      # other: purple haze
 ]
 
 

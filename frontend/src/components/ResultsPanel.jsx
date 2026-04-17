@@ -40,7 +40,7 @@ function ResultsPanel({ results, onReset }) {
         <h2 style={{ fontSize: '1.4rem', color: '#fff' }}>
           {isMulti ? `${results.length} Frame Results` : 'Segmentation Results'}
         </h2>
-        <button className="btn-primary" onClick={onReset}>
+        <button className="btn-ghost" style={{ padding: '8px 16px' }} onClick={onReset}>
           <RotateCcw size={18} />
           New Analysis
         </button>
@@ -75,27 +75,27 @@ function ResultsPanel({ results, onReset }) {
           <h3 style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }}>
             Telemetry
           </h3>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', marginBottom: '16px' }}>
-            <span style={{ fontSize: '3rem', fontWeight: '700', color: 'var(--primary)' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '16px', marginBottom: '16px', padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
+            <span className="telemetry-stat-value">
               {allClasses.length}
             </span>
-            <span style={{ color: 'var(--text-muted)' }}>Unique Terrains</span>
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem', fontWeight: '500' }}>Unique<br/>Terrains</span>
           </div>
           {isMulti && (
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px' }}>
-              <span style={{ fontSize: '2rem', fontWeight: '700', color: '#10b981' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '16px', padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
+              <span className="telemetry-stat-value" style={{ color: '#fff' }}>
                 {results.length}
               </span>
-              <span style={{ color: 'var(--text-muted)' }}>Frames Processed</span>
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem', fontWeight: '500' }}>Frames<br/>Processed</span>
             </div>
           )}
 
           {/* Download All Button (single result) */}
           {!isMulti && (
             <button
-              className="btn-primary"
+               className="btn-ghost"
+               style={{ width: '100%', marginTop: '16px', padding: '12px', display: 'flex', justifyContent: 'center', gap: '8px' }}
               onClick={() => handleDownload(results[0].maskBase64, 0)}
-              style={{ width: '100%', marginTop: '16px' }}
             >
               <Download size={18} />
               Download Mask

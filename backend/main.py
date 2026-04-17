@@ -39,15 +39,16 @@ db_manager = None  # Can be PostgreSQL or SQLite
 async def startup_event():
     global segmentation_model, qdrant_manager, db_manager
     
+    # -- Neural Engine --
     model_path = os.environ.get("MODEL_PATH", "best_model.pth")
-    
-    # -- Load Model --
     try:
         segmentation_model = SegmentationModel(model_path)
-        print(f"Model loaded from {model_path}")
     except Exception as e:
-        print(f"Warning: Could not load model: {e}")
+        print(f"CRITICAL Error initializing Neural Engine: {e}")
         segmentation_model = None
+    
+    # -- Database --
+    neon_url = os.environ.get("DATABASE_URL")
     
     # -- Qdrant Vector DB --
     qdrant_url = os.environ.get("QDRANT_URL")
@@ -155,13 +156,11 @@ async def predict(image: UploadFile = File(...), user_id: Optional[str] = None):
         contents = await image.read()
         img = Image.open(io.BytesIO(contents)).convert('RGB')
         
-        mask, classes = segmentation_model.predict(img)
-        
-        mask_array = np.array(mask)
-        mask_pil = Image.fromarray(mask_array.astype(np.uint8))
+        mask_array = segmentation_model.predict(img)
+        mask_colored = segmentation_model.get_colored_mask(mask_array)
         
         buffer = io.BytesIO()
-        mask_pil.save(buffer, format="PNG")
+        mask_colored.save(buffer, format="PNG")
         mask_base64 = base64.b64encode(buffer.getvalue()).decode()
         
         unique_classes = sorted(np.unique(mask_array).tolist())
@@ -227,13 +226,11 @@ async def predict_frame(frame_input: FrameInput):
         frame_bytes = base64.b64decode(frame_input.frame_base64)
         img = Image.open(io.BytesIO(frame_bytes)).convert('RGB')
         
-        mask, classes = segmentation_model.predict(img)
-        
-        mask_array = np.array(mask)
-        mask_pil = Image.fromarray(mask_array.astype(np.uint8))
+        mask_array = segmentation_model.predict(img)
+        mask_colored = segmentation_model.get_colored_mask(mask_array)
         
         buffer = io.BytesIO()
-        mask_pil.save(buffer, format="PNG")
+        mask_colored.save(buffer, format="PNG")
         mask_base64 = base64.b64encode(buffer.getvalue()).decode()
         
         unique_classes = sorted(np.unique(mask_array).tolist())
@@ -280,13 +277,11 @@ async def predict_batch(images: List[UploadFile] = File(...)):
             contents = await image.read()
             img = Image.open(io.BytesIO(contents)).convert('RGB')
             
-            mask, classes = segmentation_model.predict(img)
-            
-            mask_array = np.array(mask)
-            mask_pil = Image.fromarray(mask_array.astype(np.uint8))
+            mask_array = segmentation_model.predict(img)
+            mask_colored = segmentation_model.get_colored_mask(mask_array)
             
             buffer = io.BytesIO()
-            mask_pil.save(buffer, format="PNG")
+            mask_colored.save(buffer, format="PNG")
             mask_base64 = base64.b64encode(buffer.getvalue()).decode()
             
             unique_classes = sorted(np.unique(mask_array).tolist())

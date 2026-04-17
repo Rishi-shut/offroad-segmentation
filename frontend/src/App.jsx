@@ -4,6 +4,7 @@ import CameraCapture from './components/CameraCapture';
 import VideoUploader from './components/VideoUploader';
 import PreviewPanel from './components/PreviewPanel';
 import ResultsPanel from './components/ResultsPanel';
+import LegalPage from './components/LegalPage';
 import {
   LayoutDashboard, Map, Settings, History, Activity,
   AlertCircle, Image as ImageIcon, Film, Camera
@@ -25,6 +26,7 @@ function App() {
   const [phase, setPhase] = useState('idle');       // idle | preview | processing | results
   const [activeTab, setActiveTab] = useState('image'); // image | video | camera
   const [error, setError] = useState('');
+  const [legalPage, setLegalPage] = useState(null); // null | 'privacy' | 'terms' | 'cookies'
 
   // --------- Scroll Animations ---------
   useEffect(() => {
@@ -40,19 +42,15 @@ function App() {
       { threshold: 0.08, rootMargin: '0px 0px -30px 0px' }
     );
 
-    // Track which elements we've already observed to avoid duplicates
-    const observed = new Set();
-
     const scanAndObserve = () => {
-      document.querySelectorAll('.scroll-reveal').forEach(el => {
-        if (!observed.has(el)) {
-          observed.add(el);
-          scrollObserver.observe(el);
-        }
+      // Find all un-observed scroll elements
+      document.querySelectorAll('.scroll-reveal:not(.is-observed)').forEach(el => {
+        el.classList.add('is-observed');
+        scrollObserver.observe(el);
       });
     };
 
-    // Scan now (in case Clerk already rendered)
+    // Scan immediately
     scanAndObserve();
 
     // Watch for Clerk's <Show> rendering content later
@@ -182,7 +180,7 @@ function App() {
                      <button style={{ background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', padding: '8px 20px', borderRadius: '6px', cursor: 'pointer', fontWeight: '500', fontFamily: 'Inter, sans-serif' }}>Log In</button>
                   </SignInButton>
                   <SignUpButton mode="modal">
-                     <button className="btn-primary" style={{ padding: '8px 20px', fontSize: '0.9rem' }}>Get Started Free</button>
+                     <button className="btn-ghost" style={{ padding: '8px 20px', fontSize: '0.9rem' }}>Get Started Free</button>
                   </SignUpButton>
                </div>
             </nav>
@@ -201,11 +199,11 @@ function App() {
               </p>
               <div style={{ display: 'flex', gap: '20px', justifyContent: 'center', flexWrap: 'wrap' }}>
                 <SignUpButton mode="modal">
-                  <button className="btn-primary" style={{ padding: '18px 48px', fontSize: '1.15rem', boxShadow: '0 8px 30px rgba(59, 130, 246, 0.4)' }}>
+                  <button className="btn-ghost" style={{ padding: '18px 48px', fontSize: '1.15rem' }}>
                     Access Dashboard
                   </button>
                 </SignUpButton>
-                <button className="btn-ghost">
+                <button className="btn-ghost" onClick={() => window.open('http://localhost:8000/docs', '_blank')}>
                   View Documentation
                 </button>
               </div>
@@ -220,14 +218,14 @@ function App() {
           {/* ============================================
               SECTION 1: FEATURES
               ============================================ */}
-          <div className="landing-section scroll-reveal">
+          <div id="features" className="landing-section scroll-reveal">
              <div className="section-header">
                 <span className="section-tag">Core Capabilities</span>
                 <h2 className="section-title">Powerful Inference Engine</h2>
                 <p className="section-subtitle">Built for autonomous navigation across the harshest environments on Earth.</p>
              </div>
              
-             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
+             <div className="features-grid">
                 <div className="feature-card">
                    <div className="feature-icon"><Map color="var(--primary)" size={24} /></div>
                    <h3>10-Class Terrain Mapping</h3>
@@ -264,7 +262,7 @@ function App() {
           {/* ============================================
               SECTION 2: HOW IT WORKS
               ============================================ */}
-          <div className="landing-section scroll-reveal" style={{ borderTop: '1px solid var(--border-color)' }}>
+          <div id="how-it-works" className="landing-section scroll-reveal" style={{ borderTop: '1px solid var(--border-color)' }}>
              <div className="section-header">
                 <span className="section-tag">Workflow</span>
                 <h2 className="section-title">How It Works</h2>
@@ -298,14 +296,14 @@ function App() {
           {/* ============================================
               SECTION 3: TECH STACK
               ============================================ */}
-          <div className="landing-section scroll-reveal" style={{ borderTop: '1px solid var(--border-color)' }}>
+          <div id="tech-stack" className="landing-section scroll-reveal" style={{ borderTop: '1px solid var(--border-color)' }}>
              <div className="section-header">
                 <span className="section-tag">Architecture</span>
                 <h2 className="section-title">Built on Proven Technology</h2>
                 <p className="section-subtitle">Enterprise-grade infrastructure from model to deployment.</p>
              </div>
 
-             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px' }}>
+             <div className="tech-grid">
                 <div className="tech-card">
                    <h4>SegFormer-B2</h4>
                    <p>NVIDIA's pre-trained Vision Transformer with hierarchical feature extraction</p>
@@ -385,42 +383,45 @@ function App() {
                 {/* Product Column */}
                 <div className="footer-col">
                    <h4>Product</h4>
-                   <a href="#">Dashboard</a>
-                   <a href="#">Image Analysis</a>
-                   <a href="#">Video Processing</a>
-                   <a href="#">Camera Capture</a>
-                   <a href="#">API Documentation</a>
+                   <a href="#features" onClick={e => { e.preventDefault(); document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' }); }}>Dashboard</a>
+                   <a href="#features" onClick={e => { e.preventDefault(); document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' }); }}>Image Analysis</a>
+                   <a href="#features" onClick={e => { e.preventDefault(); document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' }); }}>Video Processing</a>
+                   <a href="#features" onClick={e => { e.preventDefault(); document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' }); }}>Camera Capture</a>
+                   <a href="http://localhost:8000/docs" target="_blank" rel="noopener noreferrer">API Documentation ↗</a>
                 </div>
 
                 {/* Resources Column */}
                 <div className="footer-col">
                    <h4>Resources</h4>
-                   <a href="#">Research Paper</a>
-                   <a href="#">SegFormer Docs</a>
-                   <a href="#">Training Guide</a>
-                   <a href="#">Model Weights</a>
-                   <a href="#">Changelog</a>
+                   <a href="https://arxiv.org/abs/2105.15203" target="_blank" rel="noopener noreferrer">Research Paper ↗</a>
+                   <a href="https://huggingface.co/docs/transformers/model_doc/segformer" target="_blank" rel="noopener noreferrer">SegFormer Docs ↗</a>
+                   <a href="#how-it-works" onClick={e => { e.preventDefault(); document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' }); }}>Training Guide</a>
+                   <a href="https://huggingface.co/nvidia/segformer-b2-finetuned-ade-512-512" target="_blank" rel="noopener noreferrer">Model Weights ↗</a>
+                   <a href="#features" onClick={e => { e.preventDefault(); document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' }); }}>Changelog</a>
                 </div>
 
                 {/* Contact Column */}
                 <div className="footer-col">
                    <h4>Contact</h4>
-                   <a href="mailto:contact@offroad-ai.dev">contact@offroad-ai.dev</a>
-                   <a href="#">GitHub Repository</a>
-                   <a href="#">Report an Issue</a>
-                   <a href="#">Feature Request</a>
+                   <a href="mailto:mriganksingh792005@gmail.com">mriganksingh792005@gmail.com</a>
+                   <a href="https://github.com/Rishi-shut/offroad-segmentation" target="_blank" rel="noopener noreferrer">GitHub Repository ↗</a>
+                   <a href="https://github.com/Rishi-shut/offroad-segmentation/issues" target="_blank" rel="noopener noreferrer">Report an Issue ↗</a>
+                   <a href="https://github.com/Rishi-shut/offroad-segmentation/issues/new" target="_blank" rel="noopener noreferrer">Feature Request ↗</a>
                 </div>
              </div>
 
              <div className="footer-bottom">
                 <p>&copy; 2026 Off-Road AI. All rights reserved.</p>
                 <div className="footer-links">
-                   <a href="#">Privacy Policy</a>
-                   <a href="#">Terms of Service</a>
-                   <a href="#">Cookie Policy</a>
+                   <a href="#" onClick={e => { e.preventDefault(); setLegalPage('privacy'); }}>Privacy Policy</a>
+                   <a href="#" onClick={e => { e.preventDefault(); setLegalPage('terms'); }}>Terms of Service</a>
+                   <a href="#" onClick={e => { e.preventDefault(); setLegalPage('cookies'); }}>Cookie Policy</a>
                 </div>
              </div>
           </footer>
+
+          {/* Legal Page Overlay */}
+          {legalPage && <LegalPage page={legalPage} onClose={() => setLegalPage(null)} />}
 
         </div>
       </Show>
@@ -434,7 +435,7 @@ function App() {
           {/* ------ Sidebar ------ */}
           <aside className="sidebar">
             <div style={{ marginBottom: '40px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ background: 'linear-gradient(135deg, var(--primary), var(--accent))', padding: '8px', borderRadius: '8px' }}>
+              <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', padding: '8px', borderRadius: '8px' }}>
                 <Map size={24} color="#fff" />
               </div>
               <h2 className="text-gradient" style={{ fontSize: '1.4rem', fontWeight: '800', letterSpacing: '-0.5px' }}>Off-Road AI</h2>
@@ -457,7 +458,7 @@ function App() {
 
             <div style={{ padding: '20px', background: 'rgba(255,255,255,0.05)', borderRadius: '12px', marginTop: 'auto' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-                   <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 10px #10b981' }}></div>
+                   <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#fff', boxShadow: '0 0 10px rgba(255,255,255,0.5)' }}></div>
                    <span style={{ fontSize: '0.9rem', color: 'var(--text-main)' }}>System Online</span>
                 </div>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>SegFormer B2 • Auth Active</p>
@@ -497,24 +498,24 @@ function App() {
                   {/* Quick Stats Row */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginBottom: '24px' }}>
                      <div className="glass-panel" style={{ padding: '20px', marginBottom: 0, display: 'flex', alignItems: 'center', gap: '16px' }}>
-                        <div style={{ padding: '12px', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)' }}><Activity color="var(--primary)" size={24}/></div>
+                        <div style={{ padding: '12px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.1)' }}><Activity color="#fff" size={24}/></div>
                         <div>
                           <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Engine Status</p>
                           <p style={{ fontWeight: '600', fontSize: '1.1rem', color: '#fff' }}>Online</p>
                         </div>
                      </div>
                      <div className="glass-panel" style={{ padding: '20px', marginBottom: 0, display: 'flex', alignItems: 'center', gap: '16px' }}>
-                        <div style={{ padding: '12px', background: 'rgba(37, 99, 235, 0.1)', borderRadius: '12px', border: '1px solid rgba(37, 99, 235, 0.2)' }}><Map color="var(--accent)" size={24}/></div>
+                        <div style={{ padding: '12px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.1)' }}><Map color="#fff" size={24}/></div>
                         <div>
                           <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Active Model</p>
                           <p style={{ fontWeight: '600', fontSize: '1.1rem', color: '#fff' }}>SegFormer-B2</p>
                         </div>
                      </div>
                      <div className="glass-panel" style={{ padding: '20px', marginBottom: 0, display: 'flex', alignItems: 'center', gap: '16px' }}>
-                        <div style={{ padding: '12px', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '12px', border: '1px solid rgba(16, 185, 129, 0.2)' }}><History color="#10b981" size={24}/></div>
+                        <div style={{ padding: '12px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.1)' }}><History color="#fff" size={24}/></div>
                         <div>
                           <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Quota</p>
-                          <p style={{ fontWeight: '600', fontSize: '1.1rem', color: '#10b981' }}>Unlimited</p>
+                          <p style={{ fontWeight: '600', fontSize: '1.1rem', color: '#fff' }}>Unlimited</p>
                         </div>
                      </div>
                   </div>

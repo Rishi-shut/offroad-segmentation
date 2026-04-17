@@ -96,20 +96,30 @@ const ImageComparator = ({ originalSrc, maskSrc }) => {
       onMouseMove={handleMove}
       onTouchMove={handleMove}
     >
-      {/* Mask (bottom layer) */}
-      {maskSrc && <img src={maskSrc} alt="Mask" style={baseImgStyle} />}
+      {/* Original Image (bottom layer) */}
+      <img src={originalSrc} alt="Original" style={baseImgStyle} />
 
-      {/* Original (top layer, clipped) */}
-      <img src={originalSrc} alt="Original" style={overlayImgStyle} />
+      {/* Mask (top layer, clipped for reveal effect) */}
+      {maskSrc && (
+        <img 
+          src={maskSrc} 
+          alt="Mask" 
+          style={{
+            ...overlayImgStyle,
+            opacity: 1.0, // Solid Opaque Mask
+            mixBlendMode: 'normal', // No blending, pure solid markers
+          }} 
+        />
+      )}
 
       {/* Slider line + knob */}
       <div style={sliderLineStyle}>
         <div style={sliderKnobStyle} />
       </div>
 
-      {/* Labels */}
-      <span style={labelStyle('left')}>Original</span>
-      <span style={labelStyle('right')}>Segmented</span>
+      {/* Dynamic Labels */}
+      <span style={labelStyle('left')}>Segmented</span>
+      <span style={labelStyle('right')}>Original Image</span>
     </div>
   );
 };

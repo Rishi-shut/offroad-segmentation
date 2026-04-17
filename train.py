@@ -4,7 +4,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.amp import autocast, GradScaler
+from torch.cuda.amp import autocast, GradScaler
 from transformers import SegformerForSemanticSegmentation
 from tqdm import tqdm
 
@@ -52,13 +52,11 @@ def train_epoch(model, train_loader, optimizer, scheduler, criterion, device, sc
     for images, masks, _ in pbar:
         images = images.to(device)
         masks = masks.to(device, dtype=torch.long)
-        if masks.dim() == 4:
-            masks = masks.squeeze(1)
         
         optimizer.zero_grad()
         
-        if config.USE_AMP and device.type == 'cuda':
-            with autocast(device_type=device.type):
+        if config.USE_AMP:
+            with autocast():
                 outputs = model(images).logits
                 outputs = F.interpolate(outputs, size=masks.shape[-2:], mode="bilinear", align_corners=False)
                 loss = criterion(outputs, masks)
@@ -115,8 +113,6 @@ def validate_epoch(model, val_loader, criterion, device):
         for images, masks, _ in pbar:
             images = images.to(device)
             masks = masks.to(device, dtype=torch.long)
-            if masks.dim() == 4:
-                masks = masks.squeeze(1)
             
             outputs = model(images).logits
             outputs = F.interpolate(outputs, size=masks.shape[-2:], mode="bilinear", align_corners=False)
@@ -182,12 +178,30 @@ def main():
         eta_min=1e-6
     )
     
-    scaler = GradScaler() if (config.USE_AMP and device.type == 'cuda') else None
+    scaler = GradScaler() if config.USE_AMP else None
     
     best_iou = 0.0
     patience_counter = 0
+    start_epoch = 0
     
-    for epoch in range(config.EPOCHS):
+    if hasattr(config, 'CHECKPOINT_PATH') and os.path.exists(config.CHECKPOINT_PATH):
+        print(f"  Loading checkpoint from {config.CHECKPOINT_PATH}...")
+        try:
+            checkpoint = torch.load(config.CHECKPOINT_PATH, map_location=device, weights_only=False)
+            model.load_state_dict(checkpoint['model_state_dict'])
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+            if scaler and 'scaler_state_dict' in checkpoint:
+                scaler.load_state_dict(checkpoint['scaler_state_dict'])
+            start_epoch = checkpoint['epoch'] + 1
+            best_iou = checkpoint.get('best_iou', 0.0)
+            patience_counter = checkpoint.get('patience_counter', 0)
+            print(f"  Resuming from epoch {start_epoch + 1}")
+        except Exception as e:
+            print(f"  Warning: Failed to load checkpoint. Corrupted file? Error: {e}")
+            print("  Starting training from scratch...")
+    
+    for epoch in range(start_epoch, config.EPOCHS):
         print(f"\n{'='*60}")
         print(f"Epoch {epoch+1}/{config.EPOCHS}")
         print(f"{'='*60}")
@@ -216,6 +230,19 @@ def main():
         if patience_counter >= config.PATIENCE:
             print(f"\n Early stopping at epoch {epoch+1}")
             break
+            
+        checkpoint = {
+            'epoch': epoch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'scheduler_state_dict': scheduler.state_dict(),
+            'best_iou': best_iou,
+            'patience_counter': patience_counter,
+        }
+        if scaler:
+            checkpoint['scaler_state_dict'] = scaler.state_dict()
+        if hasattr(config, 'CHECKPOINT_PATH'):
+            torch.save(checkpoint, config.CHECKPOINT_PATH)
     
     print(f"\n Training complete! Best validation IoU: {best_iou:.4f}")
 

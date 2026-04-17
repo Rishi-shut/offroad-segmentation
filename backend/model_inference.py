@@ -2,14 +2,33 @@ import os
 import numpy as np
 from PIL import Image
 import torch
+import cv2
 from transformers import SegformerForSemanticSegmentation, SegformerImageProcessor
-import albumentations as A
-from albumentations.pytorch import ToTensorV2
 
-
+# Constants
 MODEL_NAME = "nvidia/segformer-b2-finetuned-ade-512-512"
 IMAGE_SIZE = 512
 NUM_CLASSES = 10
+
+# Hardcoded Mappings for Zero-Dependency Performance
+CLASS_NAMES = [
+    'Background', 'Road', 'Vegetation', 'Gravel', 'Sand', 
+    'Rock', 'Obstacle', 'Trail', 'Water', 'Other'
+]
+
+# High-Contrast Industrial Palette (BGR for OpenCV)
+PALETTE_BGR = np.array([
+    [0, 0, 0],         # 0: Background (Black)
+    [255, 0, 0],       # 1: Road (Pure Blue)
+    [0, 255, 0],       # 2: Vegetation (Neon Green)
+    [0, 255, 255],     # 3: Gravel (Neon Yellow)
+    [0, 165, 255],     # 4: Sand (Vibrant Orange)
+    [255, 0, 255],     # 5: Rock (Hot Pink)
+    [0, 0, 255],       # 6: Obstacle (Pure Red)
+    [200, 200, 200],   # 7: Trail (Bright Silver)
+    [255, 255, 0],     # 8: Water (Electric Cyan)
+    [128, 0, 255]      # 9: Other (Electric Purple)
+], dtype=np.uint8)
 
 
 class SegmentationModel:
@@ -18,8 +37,10 @@ class SegmentationModel:
         self.image_size = IMAGE_SIZE
         self.num_classes = NUM_CLASSES
         
+        # Load Official Processor
         self.processor = SegformerImageProcessor.from_pretrained(MODEL_NAME)
         
+        # Load Model
         if model_path and os.path.exists(model_path):
             self.model = SegformerForSemanticSegmentation.from_pretrained(
                 MODEL_NAME,
@@ -29,79 +50,70 @@ class SegmentationModel:
             self.model.load_state_dict(torch.load(model_path, map_location=self.device))
             self.model.to(self.device)
             self.model.eval()
-            print(f"Loaded model from {model_path}")
+            print(f"Neural Engine Initialized: {model_path} on {self.device}")
         else:
             self.model = None
-            print(f"Warning: Model not loaded, using dummy predictions")
+            print(f"Warning: Offline Engine - using dummy predictions")
+
+    def get_colored_mask(self, mask_array):
+        """Ultra-Fast Industrial Coloring Engine."""
+        # Vectorized palette mapping (NumPy)
+        colored_mask = PALETTE_BGR[mask_array]
         
-        self.transform = self._get_transform()
+        # Professional Edge Softening (Tiny 3x3 kernel for speed)
+        final_mask = cv2.GaussianBlur(colored_mask, (3, 3), 0)
         
-        try:
-            from embedder import Embedder
-            self.embedder = Embedder(embedding_dim=768)
-            self.embedder.to(self.device)
-            self.embedder.eval()
-        except:
-            self.embedder = None
-    
-    def _get_transform(self):
-        return A.Compose([
-            A.Resize(self.image_size, self.image_size),
-            A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-            ToTensorV2()
-        ])
-    
-    def _preprocess(self, image: Image.Image):
-        img_array = np.array(image.convert('RGB'))
-        transformed = self.transform(image=img_array)
-        return transformed['image']
-    
+        # BGR -> RGB for Frontend
+        final_rgb = cv2.cvtColor(final_mask, cv2.COLOR_BGR2RGB)
+        return Image.fromarray(final_rgb)
+
     def predict(self, image: Image.Image):
         if self.model is None:
             return self._dummy_prediction(image)
         
-        processed = self._preprocess(image)
-        processed = processed.unsqueeze(0).to(self.device)
+        # 1. Preprocess
+        inputs = self.processor(images=image.convert('RGB'), return_tensors="pt")
+        pixel_values = inputs['pixel_values'].to(self.device)
         
+        # 2. Inference with Sensitizer
         with torch.no_grad():
-            outputs = self.model(processed).logits
+            outputs = self.model(pixel_values=pixel_values).logits
             
+            # Neural Sensitizer: Penalize Background(0) and Road(1) to reveal Grass/Rock/Sand
+            bias = torch.zeros_like(outputs)
+            bias[:, 0, :, :] = -2.5 
+            bias[:, 1, :, :] = -1.5 
+            
+            # Upsample and Apply argmax
             upsampled = torch.nn.functional.interpolate(
-                outputs,
+                outputs + bias,
                 size=(self.image_size, self.image_size),
                 mode='bilinear',
                 align_corners=False
             )
-            
             pred_mask = upsampled.argmax(dim=1).squeeze(0)
         
         mask_array = pred_mask.cpu().numpy().astype(np.uint8)
         
-        return Image.fromarray(mask_array), mask_array
+        # 3. High-Speed Neural Audit (Diagnostic)
+        classes, counts = np.unique(mask_array, return_counts=True)
+        total = mask_array.size
+        print(f"--- TERRAIN AUDIT ---")
+        for c, count in zip(classes, counts):
+            name = CLASS_NAMES[c] if c < len(CLASS_NAMES) else f"ID_{c}"
+            print(f"| {name:<12} : { (count/total)*100:>5.1f}% |")
+        
+        return mask_array
     
     def _dummy_prediction(self, image: Image.Image):
-        img = image.resize((self.image_size, self.image_size))
-        mask_array = np.random.randint(0, self.num_classes, (self.image_size, self.image_size), dtype=np.uint8)
-        return Image.fromarray(mask_array), mask_array
-    
+        return np.random.randint(0, self.num_classes, (self.image_size, self.image_size), dtype=np.uint8)
+
     def extract_embedding(self, image: Image.Image):
-        if self.embedder is None:
-            return np.random.randn(768)
-        
-        img_array = np.array(image.convert('RGB').resize((self.image_size, self.image_size)))
-        
-        transform = A.Compose([
-            A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-            ToTensorV2()
-        ])
-        
-        tensor = transform(image=img_array)['image'].unsqueeze(0).to(self.device)
-        
+        """Fast Feature Embedding for Vector Storage."""
+        inputs = self.processor(images=image.convert('RGB'), return_tensors="pt")
+        pixel_values = inputs['pixel_values'].to(self.device)
         with torch.no_grad():
-            embedding = self.embedder(tensor)
-        
-        return embedding.cpu().numpy().squeeze()
-
-
-def load_model(model_path: str = None):
-    return SegmentationModel(model_path)
+            outputs = self.model(pixel_values=pixel_values, output_hidden_states=True)
+            # Use mean pooled last hidden state as embedding
+            embedding = outputs.hidden_states[-1].mean(dim=(2, 3)).squeeze().cpu().numpy()
+        return embedding
