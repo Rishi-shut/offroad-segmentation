@@ -166,8 +166,9 @@ async def predict(image: UploadFile = File(...), user_id: Optional[str] = None):
         unique_classes = sorted(np.unique(mask_array).tolist())
         
         # Store embedding in Qdrant
-        if qdrant_manager and qdrant_manager.client and segmentation_model.embedder:
+        if qdrant_manager and qdrant_manager.client:
             try:
+                # Use the new high-performance extraction method
                 embedding = segmentation_model.extract_embedding(img)
                 payload = {
                     "image_id": image.filename,
@@ -359,15 +360,25 @@ async def get_user_history(user_id: str, limit: int = 20):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# -- Stats (existing) --
+# -- Stats --
 @app.get("/stats/")
 async def get_stats():
-    stats = {"total_predictions": 0, "qdrant_points": 0}
+    stats = {
+        "total_predictions": 0, 
+        "qdrant_points": 0,
+        "device": segmentation_model.device if segmentation_model else "unknown",
+        "model": "SegFormer-B2",
+        "avg_latency": getattr(segmentation_model, 'avg_latency', 0) if segmentation_model else 0
+    }
     
     if qdrant_manager and qdrant_manager.client:
         try:
             info = qdrant_manager.get_collection_info()
-            stats["qdrant_points"] = info.get('points_count', 0)
+            # Handle different return types from qdrant-client versions
+            if hasattr(info, 'points_count'):
+                stats["qdrant_points"] = info.points_count
+            else:
+                stats["qdrant_points"] = info.get('points_count', 0)
         except:
             pass
     

@@ -211,6 +211,12 @@ Key parameters in `config.py`:
 └── README.md
 ```
 
+## Hosted Model
+
+The fine-tuned model and development snapshots are available on Hugging Face:
+
+- **Hugging Face Commit**: [Mizara/Dimsum (708e36a)](https://huggingface.co/Mizara/Dimsum/commit/708e36a186e6c958f60f12051e6238dcbcfb68b5)
+
 ## Visualization
 
 Generate visualizations:

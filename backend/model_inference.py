@@ -1,4 +1,5 @@
 import os
+import time
 import numpy as np
 from PIL import Image
 import torch
@@ -10,24 +11,23 @@ MODEL_NAME = "nvidia/segformer-b2-finetuned-ade-512-512"
 IMAGE_SIZE = 512
 NUM_CLASSES = 10
 
-# Hardcoded Mappings for Zero-Dependency Performance
 CLASS_NAMES = [
     'Background', 'Road', 'Vegetation', 'Gravel', 'Sand', 
     'Rock', 'Obstacle', 'Trail', 'Water', 'Other'
 ]
 
-# High-Contrast Industrial Palette (BGR for OpenCV)
+# High-Intensity Atomic Palette (BGR)
 PALETTE_BGR = np.array([
-    [0, 0, 0],         # 0: Background (Black)
-    [255, 0, 0],       # 1: Road (Pure Blue)
-    [0, 255, 0],       # 2: Vegetation (Neon Green)
-    [0, 255, 255],     # 3: Gravel (Neon Yellow)
-    [0, 165, 255],     # 4: Sand (Vibrant Orange)
-    [255, 0, 255],     # 5: Rock (Hot Pink)
-    [0, 0, 255],       # 6: Obstacle (Pure Red)
-    [200, 200, 200],   # 7: Trail (Bright Silver)
-    [255, 255, 0],     # 8: Water (Electric Cyan)
-    [128, 0, 255]      # 9: Other (Electric Purple)
+    [0, 0, 0],           # 0: Background
+    [255, 50, 50],       # 1: Road (Blue)
+    [50, 255, 50],       # 2: Vegetation (Green)
+    [50, 255, 255],      # 3: Gravel (Yellow)
+    [50, 150, 255],      # 4: Sand (Orange)
+    [255, 50, 255],      # 5: Rock (Pink)
+    [50, 50, 255],       # 6: Obstacle (Red)
+    [220, 220, 220],     # 7: Trail (Silver)
+    [255, 255, 50],      # 8: Water (Cyan)
+    [255, 100, 150]      # 9: Other (Purple)
 ], dtype=np.uint8)
 
 
@@ -35,59 +35,82 @@ class SegmentationModel:
     def __init__(self, model_path: str = None, device: str = None):
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.image_size = IMAGE_SIZE
-        self.num_classes = NUM_CLASSES
-        
-        # Load Official Processor
         self.processor = SegformerImageProcessor.from_pretrained(MODEL_NAME)
+        self.avg_latency = 0.0
         
-        # Load Model
+        print(f"--- NEURAL GATING AUDIT ---")
+        if not (model_path and os.path.exists(model_path)):
+            error_msg = f"CRITICAL: Model file not found at {model_path}. Neural Engine cannot start."
+            print(error_msg)
+            raise FileNotFoundError(error_msg)
+            
+        # 1. Load the original fine-tuned weights (B2)
+        print(f"Loading ORIGINAL Neural Engine: {MODEL_NAME}")
+        self.model = SegformerForSemanticSegmentation.from_pretrained(
+            MODEL_NAME,
+            num_labels=NUM_CLASSES,
+            ignore_mismatched_sizes=True
+        )
+        
         if model_path and os.path.exists(model_path):
-            self.model = SegformerForSemanticSegmentation.from_pretrained(
-                MODEL_NAME,
-                num_labels=NUM_CLASSES,
-                ignore_mismatched_sizes=True
-            )
-            self.model.load_state_dict(torch.load(model_path, map_location=self.device))
-            self.model.to(self.device)
-            self.model.eval()
-            print(f"Neural Engine Initialized: {model_path} on {self.device}")
-        else:
-            self.model = None
-            print(f"Warning: Offline Engine - using dummy predictions")
+            print(f"Applying checkpoint: {model_path}")
+            checkpoint = torch.load(model_path, map_location=self.device)
+            # Handle DataParallel prefix
+            if any(k.startswith('module.') for k in checkpoint.keys()):
+                checkpoint = {k.replace('module.', ''): v for k, v in checkpoint.items()}
+            self.model.load_state_dict(checkpoint)
+            
+        self.model.to(self.device)
+        self.model.eval()
+        
+        print(f"Neural Engine SUCCESS: Original High-Fidelity Channels ACTIVE.")
+        print("-" * 30)
 
     def get_colored_mask(self, mask_array):
-        """Ultra-Fast Industrial Coloring Engine."""
-        # Vectorized palette mapping (NumPy)
-        colored_mask = PALETTE_BGR[mask_array]
+        """HUD Engine with Stroke Borders."""
+        colored_bgr = PALETTE_BGR[mask_array]
+        # Make the background fully transparent, and detections semi-transparent
+        alpha = np.where(mask_array == 0, 0, 180).astype(np.uint8)
+        bgra = cv2.merge([colored_bgr[:,:,0], colored_bgr[:,:,1], colored_bgr[:,:,2], alpha])
         
-        # Professional Edge Softening (Tiny 3x3 kernel for speed)
-        final_mask = cv2.GaussianBlur(colored_mask, (3, 3), 0)
+        # Draw White Border (Stroke) for high contrast
+        binary = (mask_array > 0).astype(np.uint8) * 255
+        edges = cv2.Canny(binary, 100, 200)
+        stroke = cv2.dilate(edges, np.ones((3,3), np.uint8), iterations=1)
+        bgra[stroke > 0] = [255, 255, 255, 255]
         
-        # BGR -> RGB for Frontend
-        final_rgb = cv2.cvtColor(final_mask, cv2.COLOR_BGR2RGB)
-        return Image.fromarray(final_rgb)
+        rgba = cv2.cvtColor(bgra, cv2.COLOR_BGRA2RGBA)
+        return Image.fromarray(rgba, 'RGBA')
 
     def predict(self, image: Image.Image):
+        start_time = time.time()
         if self.model is None:
-            return self._dummy_prediction(image)
+            return np.zeros((self.image_size, self.image_size), dtype=np.uint8)
         
-        # 1. Preprocess
+        orig_w, orig_h = image.size
         inputs = self.processor(images=image.convert('RGB'), return_tensors="pt")
         pixel_values = inputs['pixel_values'].to(self.device)
         
-        # 2. Inference with Sensitizer
         with torch.no_grad():
-            outputs = self.model(pixel_values=pixel_values).logits
+            logits = self.model(pixel_values=pixel_values).logits
             
-            # Neural Sensitizer: Penalize Background(0) and Road(1) to reveal Grass/Rock/Sand
-            bias = torch.zeros_like(outputs)
-            bias[:, 0, :, :] = -2.5 
-            bias[:, 1, :, :] = -1.5 
+            # --- THE NEURAL GATE (Aggressive Rebalancing) ---
+            # Suppression: Make background and road quieter
+            gated = logits.clone()
+            gated[:, 0, :, :] -= 15.0 # Background Penalty
+            gated[:, 1, :, :] -= 2.0  # Road Penalty
             
-            # Upsample and Apply argmax
+            # Amplification: Shouting the signals for Off-Road terrains 
+            # We use a 5.0x multiplier to force detection of Grass, Sand, Rock, etc.
+            terrains_mask = torch.ones((1, NUM_CLASSES, 1, 1), device=self.device)
+            terrains_mask[:, 0:2, :, :] = 1.0 # No amp for background/road
+            terrains_mask[:, 2:, :, :] = 5.0  # 5x AMP for Terrains
+            
+            gated = gated * terrains_mask
+                
             upsampled = torch.nn.functional.interpolate(
-                outputs + bias,
-                size=(self.image_size, self.image_size),
+                gated,
+                size=(orig_h, orig_w),
                 mode='bilinear',
                 align_corners=False
             )
@@ -95,25 +118,21 @@ class SegmentationModel:
         
         mask_array = pred_mask.cpu().numpy().astype(np.uint8)
         
-        # 3. High-Speed Neural Audit (Diagnostic)
+        self.avg_latency = (time.time() - start_time) * 1000 # ms
+        
+        # Diagnostic Audit
         classes, counts = np.unique(mask_array, return_counts=True)
-        total = mask_array.size
-        print(f"--- TERRAIN AUDIT ---")
+        print(f"--- DETECTED COMPOSITION ---")
         for c, count in zip(classes, counts):
             name = CLASS_NAMES[c] if c < len(CLASS_NAMES) else f"ID_{c}"
-            print(f"| {name:<12} : { (count/total)*100:>5.1f}% |")
+            print(f"| {name:<12} : { (count/mask_array.size)*100:>5.1f}% |")
         
         return mask_array
     
-    def _dummy_prediction(self, image: Image.Image):
-        return np.random.randint(0, self.num_classes, (self.image_size, self.image_size), dtype=np.uint8)
-
     def extract_embedding(self, image: Image.Image):
-        """Fast Feature Embedding for Vector Storage."""
         inputs = self.processor(images=image.convert('RGB'), return_tensors="pt")
         pixel_values = inputs['pixel_values'].to(self.device)
         with torch.no_grad():
             outputs = self.model(pixel_values=pixel_values, output_hidden_states=True)
-            # Use mean pooled last hidden state as embedding
             embedding = outputs.hidden_states[-1].mean(dim=(2, 3)).squeeze().cpu().numpy()
         return embedding

@@ -38,6 +38,9 @@ data/
 *.ckpt
 *.h5
 *.weights
+*.onnx
+*.data
+*.bin
 models/
 
 # VS Code / IDE

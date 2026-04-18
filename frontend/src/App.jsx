@@ -25,6 +25,7 @@ function App() {
   // --------- State Machine ---------
   const [phase, setPhase] = useState('idle');       // idle | preview | processing | results
   const [activeTab, setActiveTab] = useState('image'); // image | video | camera
+  const [view, setView] = useState('dashboard'); // dashboard | history | stats
   const [error, setError] = useState('');
   const [legalPage, setLegalPage] = useState(null); // null | 'privacy' | 'terms' | 'cookies'
 
@@ -233,8 +234,8 @@ function App() {
                 </div>
                 <div className="feature-card">
                    <div className="feature-icon"><Activity color="var(--primary)" size={24} /></div>
-                   <h3>Sub-150ms Latency</h3>
-                   <p>Optimized Vision Transformer architectures deliver real-time inference perfectly suited for live video feeds on edge devices and embedded GPUs.</p>
+                   <h3>Transformer Engine</h3>
+                   <p>Optimized Vision Transformer architectures deliver high-fidelity inference perfectly suited for rugged terrain analysis.</p>
                 </div>
                 <div className="feature-card">
                    <div className="feature-icon"><History color="var(--primary)" size={24} /></div>
@@ -340,7 +341,7 @@ function App() {
                 <span className="stat-label">Model Accuracy</span>
              </div>
              <div className="stat-item">
-                <span className="stat-value">&lt;150ms</span>
+                <span className="stat-value">&lt;500ms</span>
                 <span className="stat-label">Inference Latency</span>
              </div>
              <div className="stat-item">
@@ -434,7 +435,10 @@ function App() {
 
           {/* ------ Sidebar ------ */}
           <aside className="sidebar">
-            <div style={{ marginBottom: '40px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div 
+              style={{ marginBottom: '40px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}
+              onClick={() => setView('dashboard')}
+            >
               <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', padding: '8px', borderRadius: '8px' }}>
                 <Map size={24} color="#fff" />
               </div>
@@ -442,15 +446,15 @@ function App() {
             </div>
 
             <nav style={{ flex: 1 }}>
-              <div className="nav-item active">
+              <div className={`nav-item ${view === 'dashboard' ? 'active' : ''}`} onClick={() => setView('dashboard')}>
                 <LayoutDashboard size={20} />
                 <span>Dashboard</span>
               </div>
-              <div className="nav-item">
+              <div className={`nav-item ${view === 'history' ? 'active' : ''}`} onClick={() => setView('history')}>
                 <History size={20} />
                 <span>History</span>
               </div>
-              <div className="nav-item">
+              <div className={`nav-item ${view === 'stats' ? 'active' : ''}`} onClick={() => setView('stats')}>
                 <Activity size={20} />
                 <span>System Stats</span>
               </div>
@@ -469,8 +473,16 @@ function App() {
           <main className="main-content">
             <header className="header">
               <div>
-                <h1 style={{ fontSize: '1.5rem', fontWeight: '600' }}>Terrain Intelligence</h1>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>Upload visuals for dense predictive segmentation</p>
+                <h1 style={{ fontSize: '1.5rem', fontWeight: '600' }}>
+                  {view === 'dashboard' && 'Terrain Intelligence'}
+                  {view === 'history' && 'Session Archive'}
+                  {view === 'stats' && 'Neural Telemetry'}
+                </h1>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>
+                  {view === 'dashboard' && 'Upload visuals for dense predictive segmentation'}
+                  {view === 'history' && 'Review your previous autonomous analysis sessions'}
+                  {view === 'stats' && 'Real-time performance metrics from the SegFormer engine'}
+                </p>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                 <button className="btn-primary" style={{ padding: '8px 16px', background: 'var(--bg-panel)', border: '1px solid var(--border-color)', boxShadow: 'none' }}>
@@ -491,84 +503,104 @@ function App() {
                 </div>
               )}
 
-              {/* ---- PHASE: IDLE (Input Selection) ---- */}
-              {phase === 'idle' && (
-                <div className="animate-fade-in">
+              {/* View: Dashboard */}
+              {view === 'dashboard' && (
+                <>
+                  {/* ---- PHASE: IDLE (Input Selection) ---- */}
+                  {phase === 'idle' && (
+                    <div className="animate-fade-in">
 
-                  {/* Quick Stats Row */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginBottom: '24px' }}>
-                     <div className="glass-panel" style={{ padding: '20px', marginBottom: 0, display: 'flex', alignItems: 'center', gap: '16px' }}>
-                        <div style={{ padding: '12px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.1)' }}><Activity color="#fff" size={24}/></div>
-                        <div>
-                          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Engine Status</p>
-                          <p style={{ fontWeight: '600', fontSize: '1.1rem', color: '#fff' }}>Online</p>
-                        </div>
-                     </div>
-                     <div className="glass-panel" style={{ padding: '20px', marginBottom: 0, display: 'flex', alignItems: 'center', gap: '16px' }}>
-                        <div style={{ padding: '12px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.1)' }}><Map color="#fff" size={24}/></div>
-                        <div>
-                          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Active Model</p>
-                          <p style={{ fontWeight: '600', fontSize: '1.1rem', color: '#fff' }}>SegFormer-B2</p>
-                        </div>
-                     </div>
-                     <div className="glass-panel" style={{ padding: '20px', marginBottom: 0, display: 'flex', alignItems: 'center', gap: '16px' }}>
-                        <div style={{ padding: '12px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.1)' }}><History color="#fff" size={24}/></div>
-                        <div>
-                          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Quota</p>
-                          <p style={{ fontWeight: '600', fontSize: '1.1rem', color: '#fff' }}>Unlimited</p>
-                        </div>
-                     </div>
-                  </div>
+                      {/* Quick Stats Row */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginBottom: '24px' }}>
+                         <div className="glass-panel" style={{ padding: '20px', marginBottom: 0, display: 'flex', alignItems: 'center', gap: '16px', cursor: 'pointer' }} onClick={() => setView('stats')}>
+                            <div style={{ padding: '12px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.1)' }}><Activity color="#fff" size={24}/></div>
+                            <div>
+                              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Engine Status</p>
+                              <p style={{ fontWeight: '600', fontSize: '1.1rem', color: '#fff' }}>Online</p>
+                            </div>
+                         </div>
+                         <div className="glass-panel" style={{ padding: '20px', marginBottom: 0, display: 'flex', alignItems: 'center', gap: '16px' }}>
+                            <div style={{ padding: '12px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.1)' }}><Map color="#fff" size={24}/></div>
+                            <div>
+                              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Active Model</p>
+                              <p style={{ fontWeight: '600', fontSize: '1.1rem', color: '#fff' }}>SegFormer-B2</p>
+                            </div>
+                         </div>
+                         <div className="glass-panel" style={{ padding: '20px', marginBottom: 0, display: 'flex', alignItems: 'center', gap: '16px' }}>
+                            <div style={{ padding: '12px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.1)' }}><History color="#fff" size={24}/></div>
+                            <div>
+                              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Quota</p>
+                              <p style={{ fontWeight: '600', fontSize: '1.1rem', color: '#fff' }}>Unlimited</p>
+                            </div>
+                         </div>
+                      </div>
 
-                  {/* Input Area */}
-                  <div className="glass-panel" style={{ padding: '32px' }}>
-                    <h3 style={{ marginBottom: '20px', fontSize: '1.2rem', fontWeight: '600' }}>New Analysis</h3>
+                      {/* Input Area */}
+                      <div className="glass-panel" style={{ padding: '32px' }}>
+                        <h3 style={{ marginBottom: '20px', fontSize: '1.2rem', fontWeight: '600' }}>New Analysis</h3>
 
-                    {/* Tab Bar */}
-                    <div className="tab-bar">
-                      <button className={`tab-btn ${activeTab === 'image' ? 'active' : ''}`} onClick={() => setActiveTab('image')}>
-                        <ImageIcon size={18} /> Image
-                      </button>
-                      <button className={`tab-btn ${activeTab === 'video' ? 'active' : ''}`} onClick={() => setActiveTab('video')}>
-                        <Film size={18} /> Video
-                      </button>
-                      <button className={`tab-btn ${activeTab === 'camera' ? 'active' : ''}`} onClick={() => setActiveTab('camera')}>
-                        <Camera size={18} /> Camera
-                      </button>
+                        {/* Tab Bar */}
+                        <div className="tab-bar">
+                          <button className={`tab-btn ${activeTab === 'image' ? 'active' : ''}`} onClick={() => setActiveTab('image')}>
+                            <ImageIcon size={18} /> Image
+                          </button>
+                          <button className={`tab-btn ${activeTab === 'video' ? 'active' : ''}`} onClick={() => setActiveTab('video')}>
+                            <Film size={18} /> Video
+                          </button>
+                          <button className={`tab-btn ${activeTab === 'camera' ? 'active' : ''}`} onClick={() => setActiveTab('camera')}>
+                            <Camera size={18} /> Camera
+                          </button>
+                        </div>
+
+                        {/* Tab Content */}
+                        {activeTab === 'image' && <Uploader onFileChosen={handleFileChosen} />}
+                        {activeTab === 'video' && <VideoUploader onFramesExtracted={handleFramesExtracted} />}
+                        {activeTab === 'camera' && <CameraCapture onCapture={handleFileChosen} />}
+                      </div>
                     </div>
+                  )}
 
-                    {/* Tab Content */}
-                    {activeTab === 'image' && <Uploader onFileChosen={handleFileChosen} />}
-                    {activeTab === 'video' && <VideoUploader onFramesExtracted={handleFramesExtracted} />}
-                    {activeTab === 'camera' && <CameraCapture onCapture={handleFileChosen} />}
-                  </div>
+                  {/* ---- PHASE: PREVIEW ---- */}
+                  {phase === 'preview' && (
+                    <div className="glass-panel" style={{ padding: '32px' }}>
+                      <PreviewPanel
+                        files={pendingFiles}
+                        mode={activeTab}
+                        onConfirm={handleAnalyze}
+                        onCancel={handleReset}
+                      />
+                    </div>
+                  )}
+
+                  {/* ---- PHASE: PROCESSING ---- */}
+                  {phase === 'processing' && (
+                    <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '400px' }}>
+                       <div className="spinner" style={{ marginBottom: '24px' }}></div>
+                       <h3 style={{ fontSize: '1.2rem', color: 'var(--text-main)' }}>Processing {pendingFiles.length > 1 ? `${pendingFiles.length} frames` : 'image'}</h3>
+                       <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>Running inference via SegFormer model...</p>
+                    </div>
+                  )}
+
+                  {/* ---- PHASE: RESULTS ---- */}
+                  {phase === 'results' && (
+                    <ResultsPanel results={results} onReset={handleReset} />
+                  )}
+                </>
+              )}
+
+              {/* View: History (Standalone) */}
+              {view === 'history' && (
+                <div className="animate-fade-in">
+                  <ResultsPanel results={[]} onReset={() => setView('dashboard')} />
                 </div>
               )}
 
-              {/* ---- PHASE: PREVIEW ---- */}
-              {phase === 'preview' && (
-                <div className="glass-panel" style={{ padding: '32px' }}>
-                  <PreviewPanel
-                    files={pendingFiles}
-                    mode={activeTab}
-                    onConfirm={handleAnalyze}
-                    onCancel={handleReset}
-                  />
+              {/* View: Stats (Standalone) */}
+              {view === 'stats' && (
+                <div className="animate-fade-in">
+                   {/* In a real app we might show deeper metrics here */}
+                   <ResultsPanel results={[]} onReset={() => setView('dashboard')} />
                 </div>
-              )}
-
-              {/* ---- PHASE: PROCESSING ---- */}
-              {phase === 'processing' && (
-                <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '400px' }}>
-                   <div className="spinner" style={{ marginBottom: '24px' }}></div>
-                   <h3 style={{ fontSize: '1.2rem', color: 'var(--text-main)' }}>Processing {pendingFiles.length > 1 ? `${pendingFiles.length} frames` : 'image'}</h3>
-                   <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>Running inference via SegFormer model...</p>
-                </div>
-              )}
-
-              {/* ---- PHASE: RESULTS ---- */}
-              {phase === 'results' && (
-                <ResultsPanel results={results} onReset={handleReset} />
               )}
 
             </div>

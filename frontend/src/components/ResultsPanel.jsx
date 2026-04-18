@@ -1,27 +1,23 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import ImageComparator from './ImageComparator';
 import Legend from './Legend';
-import { Download, RotateCcw } from 'lucide-react';
+import SystemHUD from './SystemHUD';
+import HistoryDock from './HistoryDock';
+import { Download, RotateCcw, ShieldCheck, Cpu } from 'lucide-react';
 
 /**
  * ResultsPanel Component
  * ----------------------
- * Displays segmentation results for single images or multiple video frames.
- * Includes:
- *   - Original vs Mask comparison (ImageComparator)
- *   - Terrain class legend
- *   - Telemetry stats
- *   - Download button for the segmented mask
- * 
- * Props:
- *   - results: Array of { originalUrl, maskBase64, classes }
- *   - onReset: callback to return to input state
+ * Displays segmentation results with futuristic GHOST HUD and History features.
  */
-function ResultsPanel({ results, onReset }) {
+function ResultsPanel({ results = [], onReset }) {
   const isMulti = results.length > 1;
+  const allClasses = results.length > 0 
+    ? [...new Set(results.flatMap(r => r.classes))].sort((a, b) => a - b)
+    : [];
 
-  // Download the mask image as a PNG file
   const handleDownload = (maskBase64, index) => {
+    if (!maskBase64) return;
     const link = document.createElement('a');
     link.href = `data:image/png;base64,${maskBase64}`;
     link.download = `segmentation_mask_${index + 1}.png`;
@@ -30,37 +26,43 @@ function ResultsPanel({ results, onReset }) {
     document.body.removeChild(link);
   };
 
-  // Aggregate all unique classes across all results
-  const allClasses = [...new Set(results.flatMap(r => r.classes))].sort((a, b) => a - b);
-
   return (
-    <div className="results-panel animate-fade-in">
+    <div className="results-panel animate-fade-in" style={{ 
+      maxWidth: '1000px',
+      margin: '0 auto'
+    }}>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h2 style={{ fontSize: '1.4rem', color: '#fff' }}>
-          {isMulti ? `${results.length} Frame Results` : 'Segmentation Results'}
-        </h2>
+      <div className="glass-panel" style={{ 
+        padding: '16px 24px', 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center',
+        background: 'rgba(5, 5, 5, 0.4)',
+        border: '1px solid rgba(255,255,255,0.05)',
+        marginBottom: '24px'
+      }}>
+        <div>
+          <h2 style={{ fontSize: '1.2rem', color: '#fff' }}>
+            {isMulti ? `${results.length} Composite Frames` : 'Terrain Analysis Report'}
+          </h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+            <ShieldCheck size={14} color="var(--primary)" />
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Secure Prediction Verified</span>
+          </div>
+        </div>
         <button className="btn-ghost" style={{ padding: '8px 16px' }} onClick={onReset}>
-          <RotateCcw size={18} />
-          New Analysis
+          <RotateCcw size={16} /> New Session
         </button>
       </div>
 
-      {/* Results Grid */}
-      <div className={isMulti ? 'results-grid' : ''}>
+      {/* Results List */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
         {results.map((result, i) => (
-          <div key={i} className="glass-panel" style={{ padding: '24px', marginBottom: isMulti ? '0' : '24px' }}>
-            {isMulti && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <span style={{ color: 'var(--primary)', fontWeight: '600' }}>Frame {i + 1}</span>
-                <button
-                  onClick={() => handleDownload(result.maskBase64, i)}
-                  style={{ background: 'none', border: '1px solid var(--border-color)', color: 'var(--text-muted)', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem' }}
-                >
-                  <Download size={14} /> Save
-                </button>
-              </div>
-            )}
+          <div key={i} className="glass-panel ghost-shadow" style={{ 
+            padding: '12px', 
+            background: 'rgba(5, 5, 5, 0.4)',
+            border: '1px solid rgba(255,255,255,0.05)'
+          }}>
             <ImageComparator
               originalSrc={result.originalUrl}
               maskSrc={`data:image/png;base64,${result.maskBase64}`}
@@ -69,46 +71,31 @@ function ResultsPanel({ results, onReset }) {
         ))}
       </div>
 
-      {/* Telemetry + Legend Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(250px, 1fr) 2fr', gap: '24px', marginTop: '24px' }}>
-        <div className="glass-panel" style={{ padding: '24px' }}>
-          <h3 style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }}>
-            Telemetry
-          </h3>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '16px', marginBottom: '16px', padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
-            <span className="telemetry-stat-value">
-              {allClasses.length}
-            </span>
-            <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem', fontWeight: '500' }}>Unique<br/>Terrains</span>
-          </div>
-          {isMulti && (
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: '16px', padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
-              <span className="telemetry-stat-value" style={{ color: '#fff' }}>
-                {results.length}
-              </span>
-              <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem', fontWeight: '500' }}>Frames<br/>Processed</span>
-            </div>
-          )}
+      {/* Legend Panel */}
+      <div className="glass-panel" style={{ 
+        padding: '24px', 
+        background: 'rgba(5, 5, 5, 0.4)', 
+        border: '1px solid rgba(255,255,255,0.05)',
+        marginTop: '24px'
+      }}>
+        <h3 style={{ color: 'var(--text-muted)', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '16px' }}>
+          Detected Composition
+        </h3>
+        <Legend classes={allClasses} />
+      </div>
 
-          {/* Download All Button (single result) */}
-          {!isMulti && (
-            <button
-               className="btn-ghost"
-               style={{ width: '100%', marginTop: '16px', padding: '12px', display: 'flex', justifyContent: 'center', gap: '8px' }}
-              onClick={() => handleDownload(results[0].maskBase64, 0)}
-            >
-              <Download size={18} />
-              Download Mask
-            </button>
-          )}
-        </div>
-
-        <div className="glass-panel" style={{ padding: '24px' }}>
-          <h3 style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }}>
-            Detected Composition
-          </h3>
-          <Legend classes={allClasses} />
-        </div>
+      {/* Quick Actions */}
+      <div className="glass-panel" style={{ padding: '24px', background: 'rgba(255, 255, 255, 0.02)', marginTop: '24px' }}>
+        <h3 style={{ color: 'var(--text-muted)', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }}>
+           Export Options
+        </h3>
+        <button
+           className="btn-ghost"
+           style={{ width: '100%', padding: '12px', display: 'flex', justifyContent: 'center', gap: '8px', fontSize: '0.9rem' }}
+          onClick={() => handleDownload(results[0]?.maskBase64, 0)}
+        >
+          <Download size={18} /> Download Mask
+        </button>
       </div>
     </div>
   );

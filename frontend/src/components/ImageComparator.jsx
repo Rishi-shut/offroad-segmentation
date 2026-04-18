@@ -106,8 +106,8 @@ const ImageComparator = ({ originalSrc, maskSrc }) => {
           alt="Mask" 
           style={{
             ...overlayImgStyle,
-            opacity: 1.0, // Solid Opaque Mask
-            mixBlendMode: 'normal', // No blending, pure solid markers
+            opacity: 1.0, // Respect backend transparency (Class 0 is hidden)
+            mixBlendMode: 'normal', // Let the RGBA colors naturally overlay the terrain
           }} 
         />
       )}
