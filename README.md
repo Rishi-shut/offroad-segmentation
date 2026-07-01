@@ -217,19 +217,7 @@ The fine-tuned model and development snapshots are available on Hugging Face:
 
 - **Hugging Face Commit**: [Mizara/Dimsum (708e36a)](https://huggingface.co/Mizara/Dimsum/commit/708e36a186e6c958f60f12051e6238dcbcfb68b5)
 
-## Visualization
 
-Generate visualizations:
-
-```python
-from utils import visualize_mask, visualize_overlay
-
-# Save predicted mask
-visualize_mask(pred_mask, save_path='pred.png')
-
-# Overlay on original image
-visualize_overlay(image, pred_mask, save_path='overlay.png')
-```
 
 ## Notes
 
