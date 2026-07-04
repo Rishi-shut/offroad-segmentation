@@ -7,7 +7,6 @@ import albumentations as A
 from albumentations.pytorch import ToTensorV2
 from transformers import SegformerForSemanticSegmentation
 from tqdm import tqdm
-
 import config
 from dataset import OffRoadDataset
 from utils import compute_iou, visualize_mask, log_iou_scores
